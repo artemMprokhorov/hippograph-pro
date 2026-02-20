@@ -302,8 +302,22 @@ def extract_entities_spacy(text: str) -> List[Tuple[str, str, float]]:
 def extract_entities(text: str, min_confidence: float = 0.5) -> List[Tuple[str, str]]:
     """
     Extract entities from text using configured backend.
+    Upgrade chain: ollama (primary) → spacy (fallback) → regex
     """
-    if EXTRACTOR_TYPE == "spacy":
+    if EXTRACTOR_TYPE == "ollama":
+        # Try Ollama first, fall back to spaCy
+        from ollama_client import is_ollama_available, extract_entities_llm
+        if is_ollama_available():
+            entities = extract_entities_llm(text)
+            if entities:
+                print(f"🤖 Ollama extracted {len(entities)} entities")
+                return entities
+            print("⚠️ Ollama returned empty, falling back to spaCy")
+        else:
+            print("⚠️ Ollama unavailable, falling back to spaCy")
+        # Fallback to spaCy
+        entities_with_confidence = extract_entities_spacy(text)
+    elif EXTRACTOR_TYPE == "spacy":
         entities_with_confidence = extract_entities_spacy(text)
     else:
         entities_with_confidence = extract_entities_regex(text)
@@ -319,7 +333,15 @@ def extract_entities_with_confidence(text: str) -> List[Tuple[str, str, float]]:
     """
     Extract entities with confidence scores.
     """
-    if EXTRACTOR_TYPE == "spacy":
+    if EXTRACTOR_TYPE == "ollama":
+        from ollama_client import is_ollama_available, extract_entities_llm
+        if is_ollama_available():
+            entities = extract_entities_llm(text)
+            if entities:
+                return [(name, etype, 0.9) for name, etype in entities]
+        # Fallback
+        return extract_entities_spacy(text)
+    elif EXTRACTOR_TYPE == "spacy":
         return extract_entities_spacy(text)
     else:
         return extract_entities_regex(text)
