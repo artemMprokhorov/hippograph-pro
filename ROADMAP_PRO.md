@@ -1,35 +1,26 @@
 # HippoGraph Pro — Roadmap
 
-**Repository:** github.com/artemMprokhorov/hippograph-pro-pro
+**Repository:** github.com/artemMprokhorov/hippograph-pro
 **Base:** Built on top of HippoGraph Personal (same container, same memory)
 **Philosophy:** Add capabilities, don't rewrite foundation. LLM as upgrade, not dependency.
 **Last Updated:** February 20, 2026
 
 ---
 
-## Phase 1 — Quick Wins (1-2 days)
+## Phase 1 — Quick Wins ✅ COMPLETED
 
-### 1. Reciprocal Rank Fusion (RRF)
-**Problem:** Current weighted blend (α×sem + β×spread + γ×BM25 + δ×temporal) requires manual
-tuning and suffers from score scale mismatch between signals.
-**Solution:** RRF merges ranked lists by rank position, not score magnitude:
-```
-RRF_score(d) = Σ 1/(k + rank_r(d)) for each retriever r
-```
-**Source:** Hindsight/TEMPR (Dec 2025) — 89.61% on LoCoMo
-- [ ] Implement RRF fusion as alternative to weighted blend
-- [ ] A/B test: RRF vs current blend on regression suite
-- [ ] Config: `FUSION_METHOD=blend|rrf`
+### 1. Reciprocal Rank Fusion (RRF) ✅
+- [x] Implement RRF fusion as alternative to weighted blend (src/rrf_fusion.py)
+- [x] A/B test: RRF vs current blend on regression suite (both 32/32 100% P@5)
+- [x] Config: `FUSION_METHOD=blend|rrf` (default: blend)
 
-**Effort:** 3-4 hours
+### 2. Graph Viewer Enhancements ✅
+- [x] Community highlighting (color clusters from NetworkX detection)
+- [x] PageRank-based node sizing (important nodes = bigger)
+- [ ] Community labels overlay (deferred)
 
-### 2. Graph Viewer Enhancements
-Deferred from Personal roadmap — visual improvements for research.
-- [ ] Community highlighting (color clusters from NetworkX detection)
-- [ ] PageRank-based node sizing (important nodes = bigger)
-- [ ] Community labels overlay
-
-**Effort:** 4-6 hours
+### Bugfix
+- [x] Fixed graph-data API 500: metrics.is_computed property called as method
 
 ---
 
@@ -76,7 +67,7 @@ Deferred from Personal roadmap — visual improvements for research.
 - [ ] Compare with Mem0 (J=66.9%), Letta (74.0%), Hindsight (89.61%)
 
 ### 8. Entity Resolution
-- [ ] Entity disambiguation ("Apple" company vs fruit via context)
+- [ ] Entity disambiguation (Apple company vs fruit via context)
 - [ ] Synonym/acronym merging (ML → Machine Learning)
 - [ ] Coreference resolution (pronouns → entities)
 
@@ -88,7 +79,7 @@ Deferred from Personal roadmap — visual improvements for research.
 
 ---
 
-## Out of Scope (not needed for our situation)
+## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
@@ -99,16 +90,3 @@ Deferred from Personal roadmap — visual improvements for research.
 | Framework integrations | MCP-only |
 | SOC2/GDPR compliance | Personal project |
 | Horizontal scaling | One user |
-
----
-
-## Competitive Position After Pro
-
-| Feature | HippoGraph Pro | Mem0 | Zep | Letta |
-|---------|---------------|------|-----|-------|
-| LLM Cost | **$0 base** + optional Ollama | Required | Required | Required |
-| Entity Extraction | LLM primary + spaCy fallback | LLM only | LLM only | LLM only |
-| Sleep Compute | Zero-LLM + LLM-enhanced | ❌ | ❌ | Sleep-time (LLM required) |
-| Temporal | Retrieval + LLM reasoning | Basic | Bi-temporal | Agent-driven |
-| RRF Fusion | ✅ | ❌ | Hybrid reranking | ❌ |
-| Self-hosted no GPU | ✅ Full functionality | Partial | Partial | ❌ |
