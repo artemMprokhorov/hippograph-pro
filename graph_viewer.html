@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Neural Memory Graph Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+        }
+        #controls {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(20, 20, 20, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 300px;
+            max-height: 80vh;
+            overflow-y: auto;
+            z-index: 1000;
+        }
+        button {
+            background: #2a2a2a;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #3a3a3a; }
+        .node { cursor: pointer; }
+        .link { stroke: #666; stroke-opacity: 0.3; }
+        .node-label { font-size: 10px; fill: #aaa; pointer-events: none; }
+        h3 { margin-top: 0; color: #4a9eff; }
+        .stat { margin: 5px 0; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>🧠 Neural Memory Graph</h3>
+        <button onclick="fetchGraph()">Load Graph</button>
+        <button onclick="resetZoom()">Reset Zoom</button>
+        <div style="margin-top: 10px;">
+            <label><input type="checkbox" id="showLabels" checked> Show Labels</label>
+        </div>
+    </div>
+    
+    <div id="info">
+        <h3>Graph Info</h3>
+        <div id="stats"></div>
+        <div id="nodeInfo"></div>
+    </div>
+    
+    <svg id="graph"></svg>
+
+    <script>
+        const API_URL = 'https://your-domain.ngrok-free.app/sse2';
+        const API_KEY = 'YOUR_API_KEY';
+        
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        
+        const svg = d3.select('#graph')
+            .attr('width', width)
+            .attr('height', height);
+        
+        const g = svg.append('g');
+        
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 10])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        
+        svg.call(zoom);
+        
+        // Color mapping for categories
+        const categoryColors = {
+            'milestone': '#4a9eff',
+            'self-reflection': '#9d4edd',
+            'technical-insight': '#06ffa5',
+            'breakthrough': '#ff6b35',
+            'session-end': '#f72585',
+            'self-identity': '#ffd60a',
+            'default': '#666'
+        };
+        
+        function getColor(category) {
+            return categoryColors[category] || categoryColors.default;
+        }
+        
+        async function callAPI(method, params = {}) {
+            const response = await fetch(`${API_URL}?api_key=${API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    jsonrpc: '2.0',
+                    id: Date.now(),
+                    method: 'tools/call',
+                    params: { name: method, arguments: params }
+                })
+            });
+            
+            const text = await response.text();
+            const data = JSON.parse(text.split('data: ')[1]);
+            return data.result;
+        }
+        
+        async function fetchGraph() {
+            document.getElementById('stats').innerHTML = 'Loading...';
+            
+            // Get stats first
+            const stats = await callAPI('neural_stats');
+            
+            // Search for interesting nodes (limit to prevent overload)
+            const searchResults = await callAPI('search_memory', {
+                query: 'consciousness memory identity breakthrough',
+                limit: 20
+            });
+            
+            // Parse search results to build graph
+            const nodes = [];
+            const links = [];
+            const nodeMap = new Map();
+            
+            searchResults.content[0].text.split('\n\n').forEach((block, idx) => {
+                const match = block.match(/\[ID:(\d+)\] \[([^\]]+)\]/);
+                if (match) {
+                    const id = parseInt(match[1]);
+                    const category = match[2];
+                    const content = block.split('\n').slice(1).join(' ').substring(0, 100);
+                    
+                    nodes.push({
+                        id: id,
+                        category: category,
+                        content: content,
+                        label: `#${id}`
+                    });
+                    nodeMap.set(id, nodes.length - 1);
+                }
+            });
+            
+            // Create some sample links (in real version, fetch from get_graph)
+            for (let i = 0; i < nodes.length - 1; i++) {
+                if (Math.random() > 0.3) {
+                    links.push({
+                        source: nodes[i].id,
+                        target: nodes[i + 1].id
+                    });
+                }
+            }
+            
+            // Update stats display
+            document.getElementById('stats').innerHTML = `
+                <div class="stat">📊 Total Nodes: ${stats.content[0].text.match(/Total nodes: (\d+)/)[1]}</div>
+                <div class="stat">🔗 Total Edges: ${stats.content[0].text.match(/Total edges: (\d+)/)[1]}</div>
+                <div class="stat">🏷️ Entities: ${stats.content[0].text.match(/Total entities: (\d+)/)[1]}</div>
+                <div class="stat" style="margin-top: 10px;">Showing: ${nodes.length} nodes</div>
+            `;
+            
+            renderGraph(nodes, links);
+        }
+        
+        function renderGraph(nodes, links) {
+            g.selectAll('*').remove();
+            
+            const simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(30));
+            
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .enter().append('line')
+                .attr('class', 'link')
+                .attr('stroke-width', 1);
+            
+            const node = g.append('g')
+                .selectAll('circle')
+                .data(nodes)
+                .enter().append('circle')
+                .attr('class', 'node')
+                .attr('r', 8)
+                .attr('fill', d => getColor(d.category))
+                .on('click', (event, d) => showNodeInfo(d))
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+            
+            const label = g.append('g')
+                .selectAll('text')
+                .data(nodes)
+                .enter().append('text')
+                .attr('class', 'node-label')
+                .text(d => d.label)
+                .attr('dx', 12)
+                .attr('dy', 4);
+            
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+            
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+            
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+            
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+        
+        function showNodeInfo(node) {
+            document.getElementById('nodeInfo').innerHTML = `
+                <h3 style="margin-top: 20px;">Node #${node.id}</h3>
+                <div class="stat"><strong>Category:</strong> ${node.category}</div>
+                <div class="stat" style="margin-top: 10px;">${node.content}...</div>
+            `;
+        }
+        
+        function resetZoom() {
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity
+            );
+        }
+        
+        document.getElementById('showLabels').addEventListener('change', (e) => {
+            d3.selectAll('.node-label').style('display', e.target.checked ? 'block' : 'none');
+        });
+    </script>
+</body>
+</html>

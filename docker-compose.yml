@@ -1,0 +1,44 @@
+services:
+  hippograph-pro:
+    build: .
+    container_name: hippograph-pro
+    ports:
+      - "5001:5000"  # API server
+      - "5002:5002"  # Web viewer
+    volumes:
+      - ./data:/app/data
+      - ./src:/app/src
+      - ./web:/var/www/html
+    environment:
+      - DB_PATH=/app/data/memory.db
+      - FLASK_PORT=5000
+      - FLASK_DEBUG=false
+      - MCP_ENDPOINT=/sse
+      # Emotional memory (optional, disabled by default)
+      - ENABLE_EMOTIONAL_MEMORY=false
+      - NEURAL_API_KEY=${NEURAL_API_KEY:-change_me_in_production}
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
+      # Spreading Activation settings
+      - ACTIVATION_ITERATIONS=3
+      - ACTIVATION_DECAY=0.7
+      - SIMILARITY_THRESHOLD=0.5
+      # Temporal decay
+      - HALF_LIFE_DAYS=30
+      # Entity extraction (regex, spacy, llm)
+      - ENTITY_EXTRACTOR=spacy
+      # Embedding model (multilingual for ru/en bilingual memory)
+      - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      # Blend scoring (semantic vs spreading activation balance)
+      - BLEND_ALPHA=0.7
+      # ANN Indexing (fast O(log n) search)
+      - USE_ANN_INDEX=true
+      - ANN_INDEX_TYPE=HNSW
+      - HNSW_M=32
+      - HNSW_EF_CONSTRUCTION=64
+      - HNSW_EF_SEARCH=32
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

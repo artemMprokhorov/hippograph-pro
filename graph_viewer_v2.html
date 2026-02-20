@@ -1,0 +1,1132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- CSP: Security policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://d3js.org; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:5001 http://localhost:5002 https://*.ngrok-free.app; img-src 'self' data:;">
+    <title>HippoGraph - Neural Memory Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+        
+        /* Controls Panel */
+        #controls {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(20, 20, 20, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            z-index: 1000;
+            max-width: 320px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        
+        h3 {
+            margin: 0 0 15px 0;
+            color: #4a9eff;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-group {
+            margin: 15px 0;
+            padding: 12px 0;
+            border-top: 1px solid #333;
+        }
+        
+        .control-group:first-of-type { border-top: none; }
+        
+        label {
+            display: block;
+            margin: 8px 0 5px 0;
+            font-size: 12px;
+            color: #aaa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+            color: #fff;
+            border: 1px solid #444;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            width: 100%;
+            margin: 4px 0;
+        }
+        
+        button:hover {
+            background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+            border-color: #4a9eff;
+        }
+        
+        button:active {
+            transform: scale(0.98);
+        }
+        
+        button.primary {
+            background: linear-gradient(135deg, #4a9eff 0%, #357abd 100%);
+            border-color: #4a9eff;
+        }
+        
+        button.primary:hover {
+            background: linear-gradient(135deg, #5aa9ff 0%, #458acf 100%);
+        }
+        
+        input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        
+        select, input[type="text"], input[type="range"] {
+            width: 100%;
+            padding: 8px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            color: #e0e0e0;
+            font-size: 13px;
+            margin-top: 5px;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+        
+        input[type="range"] {
+            padding: 0;
+            height: 6px;
+        }
+        
+        /* Info Panel */
+        #info {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(20, 20, 20, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            max-width: 350px;
+            max-height: calc(100vh - 30px);
+            overflow-y: auto;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        
+        #info::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        #info::-webkit-scrollbar-track {
+            background: #1a1a1a;
+            border-radius: 4px;
+        }
+        
+        #info::-webkit-scrollbar-thumb {
+            background: #4a9eff;
+            border-radius: 4px;
+        }
+        
+        .stat {
+            margin: 8px 0;
+            font-size: 13px;
+            padding: 8px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            border-left: 3px solid #4a9eff;
+        }
+        
+        .stat strong {
+            color: #4a9eff;
+        }
+        
+        /* Graph Elements */
+        .node {
+            cursor: pointer;
+            stroke: #000;
+            stroke-width: 2px;
+            transition: r 0.2s;
+        }
+        
+        .node:hover {
+            stroke: #4a9eff;
+            stroke-width: 3px;
+        }
+        
+        .node.highlighted {
+            stroke: #ff6b35;
+            stroke-width: 4px;
+        }
+        
+        .node.faded {
+            opacity: 0.2;
+        }
+        
+        .link {
+            /* Default styling - will be overridden by D3 */
+            transition: stroke 0.2s, stroke-opacity 0.2s;
+        }
+        
+        .link.weighted {
+            /* Weight-based gradient applied dynamically */
+        }
+        
+        .link.highlighted {
+            stroke: #4a9eff;
+            stroke-opacity: 0.8;
+            stroke-width: 2px;
+        }
+        
+        .link.faded {
+            opacity: 0.1;
+        }
+        
+        .link-weight-label {
+            font-size: 9px;
+            fill: #aaa;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+        
+        .node-label {
+            font-size: 10px;
+            fill: #aaa;
+            pointer-events: none;
+            text-anchor: middle;
+        }
+        
+        /* Loading */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 18px;
+            color: #4a9eff;
+        }
+        
+        /* Category Legend */
+        #legend {
+            position: absolute;
+            bottom: 15px;
+            right: 15px;
+            background: rgba(20, 20, 20, 0.95);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            font-size: 11px;
+            max-width: 220px;
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+        
+        .legend-item:hover {
+            background: #2a2a2a;
+        }
+        
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid #000;
+        }
+        
+        /* Weight Legend */
+        #weightLegend {
+            position: absolute;
+            bottom: 230px;
+            left: 15px;
+            background: rgba(20, 20, 20, 0.95);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            font-size: 11px;
+            max-width: 200px;
+        }
+        
+        .weight-gradient-bar {
+            width: 100%;
+            height: 20px;
+            background: linear-gradient(to right, #333 0%, #4a9eff 100%);
+            border-radius: 4px;
+            margin: 8px 0;
+            border: 1px solid #555;
+        }
+        
+        .weight-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #888;
+        }
+        
+        /* Timeline Slider */
+        #timeline {
+            position: absolute;
+            bottom: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 20, 0.95);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            width: 400px;
+        }
+        
+        .timeline-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #aaa;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <h3>🧠 HippoGraph</h3>
+        
+        <div id="configPanel" style="background: #2a1a1a; padding: 15px; border-radius: 8px; border: 2px solid #ff6b35; margin-bottom: 15px;">
+            <h4 style="margin: 0 0 10px 0; color: #ff6b35; font-size: 14px;">⚠️ Configuration Required</h4>
+            <label style="font-size: 11px;">API Endpoint URL</label>
+            <input type="text" id="apiUrl" placeholder="http://localhost:5001/sse2" value="http://localhost:5001/sse2" style="margin-bottom: 8px;">
+            <label style="font-size: 11px;">API Key</label>
+            <input type="password" id="apiKey" placeholder="Your API key">
+            <button class="primary" onclick="saveConfigAndLoad()" style="margin-top: 10px;">Connect & Load</button>
+            <p style="font-size: 10px; color: #aaa; margin: 10px 0 0 0; line-height: 1.4;">
+                ⚠️ <strong>Security:</strong> This connects to YOUR local server by default (localhost). 
+                Never commit API keys to git! See GRAPH_VIEWER.md for setup.
+            </p>
+        </div>
+        
+        <div id="mainControls" style="display: none;">
+        
+        <button class="primary" onclick="loadFullGraph()">Load Full Graph</button>
+        
+        <div class="control-group">
+            <label>Search</label>
+            <input type="text" id="searchInput" placeholder="Search notes..." onkeyup="handleSearch()">
+        </div>
+        
+        <div class="control-group">
+            <label>Filter by Category</label>
+            <select id="categoryFilter" onchange="applyFilters()">
+                <option value="">All Categories</option>
+            </select>
+        </div>
+        
+        <div class="control-group">
+            <label>Node Size: <span id="nodeSizeValue">8</span>px</label>
+            <input type="range" id="nodeSize" min="4" max="20" value="8" oninput="updateNodeSize(this.value)">
+        </div>
+        
+        <div class="control-group">
+            <label>
+                <input type="checkbox" id="showLabels" checked onchange="toggleLabels()">
+                Show Node Labels
+            </label>
+            <label>
+                <input type="checkbox" id="showEntityLinks" checked onchange="applyFilters()">
+                Show Entity Links
+            </label>
+            <label>
+                <input type="checkbox" id="showSemanticLinks" checked onchange="applyFilters()">
+                Show Semantic Links
+            </label>
+            <label>
+                <input type="checkbox" id="showLinkWeights" onchange="toggleLinkWeights()">
+                Show Link Weights
+            </label>
+        </div>
+        
+        <button onclick="resetZoom()">Reset View</button>
+        <button onclick="centerGraph()">Center Graph</button>
+        </div>
+    </div>
+    
+    <div id="info">
+        <h3>Graph Statistics</h3>
+        <div id="stats">
+            <div class="stat">Click "Load Full Graph" to begin</div>
+        </div>
+        <div id="nodeInfo"></div>
+    </div>
+    
+    <div id="legend">
+        <h3 style="font-size: 13px; margin-bottom: 10px;">Categories</h3>
+        <div id="legendContent"></div>
+    </div>
+    
+    <div id="weightLegend" style="display: none;">
+        <h3 style="font-size: 13px; margin-bottom: 10px;">Link Weights</h3>
+        <div class="weight-gradient-bar"></div>
+        <div class="weight-labels">
+            <span>Weak (0.0)</span>
+            <span>Strong (1.0)</span>
+        </div>
+        <div style="margin-top: 10px; font-size: 10px; color: #aaa; line-height: 1.4;">
+            Semantic links: similarity<br>
+            Entity links: shared entities
+        </div>
+    </div>
+    
+    <div id="timeline">
+        <label style="font-size: 12px; color: #4a9eff; display: flex; justify-content: space-between; align-items: center;">
+            <span>Timeline Filter</span>
+            <button id="playPauseBtn" onclick="toggleAutoPlay()" style="width: auto; padding: 4px 12px; font-size: 11px; margin: 0;">▶ Play</button>
+        </label>
+        <input type="range" id="timelineSlider" min="0" max="100" value="100" oninput="updateTimeline(this.value)">
+        <div class="timeline-label">
+            <span id="timelineStart">Loading...</span>
+            <span id="timelineEnd">Now</span>
+        </div>
+        <div style="font-size: 10px; color: #aaa; margin-top: 5px; text-align: center;">
+            <span id="timelineInfo">Showing all notes</span>
+        </div>
+    </div>
+    
+    <svg id="graph"></svg>
+    
+    <script>
+        // Security: HTML escaping to prevent XSS
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe
+                .toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+        
+        // Configuration
+        let API_URL = '';
+        let API_KEY = '';
+        
+        // State
+        let allNodes = [];
+        let allLinks = [];
+        let filteredNodes = [];
+        let filteredLinks = [];
+        let simulation = null;
+        let nodeElements = null;
+        let linkElements = null;
+        let labelElements = null;
+        
+        // SVG Setup
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        const svg = d3.select('#graph')
+            .attr('width', width)
+            .attr('height', height);
+        
+        const g = svg.append('g');
+        
+        // Zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 10])
+            .on('zoom', (event) => {
+                g.attr('transform', event.transform);
+            });
+        
+        svg.call(zoom);
+        
+        // Color mapping (expanded)
+        const categoryColors = {
+            'milestone': '#4a9eff',
+            'self-reflection': '#9d4edd',
+            'technical-insight': '#06ffa5',
+            'breakthrough': '#ff6b35',
+            'session-end': '#f72585',
+            'self-identity': '#ffd60a',
+            'critical-knowledge': '#ff006e',
+            'security-solution': '#fb5607',
+            'observations': '#8338ec',
+            'self-awareness': '#3a86ff',
+            'gratitude': '#ffbe0b',
+            'project-status': '#06ffa5',
+            'default': '#666'
+        };
+        
+        function getColor(category) {
+            return categoryColors[category] || categoryColors.default;
+        }
+        
+        // Weight to color mapping
+        function getWeightColor(weight) {
+            // Gradient from dark gray (#333) to bright blue (#4a9eff)
+            const w = Math.max(0, Math.min(1, weight)); // Clamp 0-1
+            
+            // Interpolate RGB
+            const r1 = 0x33, g1 = 0x33, b1 = 0x33; // #333
+            const r2 = 0x4a, g2 = 0x9e, b2 = 0xff; // #4a9eff
+            
+            const r = Math.round(r1 + (r2 - r1) * w);
+            const g = Math.round(g1 + (g2 - g1) * w);
+            const b = Math.round(b1 + (b2 - b1) * w);
+            
+            return `rgb(${r}, ${g}, ${b})`;
+        }
+        
+        function getWeightOpacity(weight) {
+            // Opacity from 0.2 (weak) to 0.8 (strong)
+            return 0.2 + (weight * 0.6);
+        }
+        
+        // Config Management with expiration
+        function saveConfigAndLoad() {
+            API_URL = document.getElementById('apiUrl').value.trim();
+            API_KEY = document.getElementById('apiKey').value.trim();
+            
+            if (!API_URL || !API_KEY) {
+                alert('Please provide both API URL and API Key');
+                return;
+            }
+            
+            // Validate URL format
+            try {
+                new URL(API_URL);
+            } catch (e) {
+                alert('Invalid API URL format. Please check the URL.');
+                return;
+            }
+            
+            // Save to localStorage for convenience (user's choice)
+            if (confirm('Save configuration locally? (stored in browser only, expires in 7 days)')) {
+                const expiry = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+                localStorage.setItem('hippograph_api_url', API_URL);
+                localStorage.setItem('hippograph_api_key', API_KEY);
+                localStorage.setItem('hippograph_expiry', expiry.toString());
+            }
+            
+            // Hide config panel, show main controls
+            document.getElementById('configPanel').style.display = 'none';
+            document.getElementById('mainControls').style.display = 'block';
+            
+            // Load graph
+            loadFullGraph();
+        }
+        
+        // Load saved config on startup with expiry check
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedUrl = localStorage.getItem('hippograph_api_url');
+            const savedKey = localStorage.getItem('hippograph_api_key');
+            const expiry = localStorage.getItem('hippograph_expiry');
+            
+            // Check if config expired
+            if (expiry && Date.now() > parseInt(expiry)) {
+                // Expired - clear all
+                localStorage.removeItem('hippograph_api_url');
+                localStorage.removeItem('hippograph_api_key');
+                localStorage.removeItem('hippograph_expiry');
+                return;
+            }
+            
+            if (savedUrl) document.getElementById('apiUrl').value = savedUrl;
+            if (savedKey) document.getElementById('apiKey').value = savedKey;
+        });
+        
+        // API Helper
+        async function callAPI(method, params = {}) {
+            try {
+                const response = await fetch(`${API_URL}?api_key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0',
+                        id: Date.now(),
+                        method: 'tools/call',
+                        params: { name: method, arguments: params }
+                    })
+                });
+                
+                const text = await response.text();
+                const data = JSON.parse(text.split('data: ')[1]);
+                return data.result;
+            } catch (error) {
+                console.error('API call failed:', error);
+                throw error;
+            }
+        }
+        
+        // Load Full Graph
+        async function loadFullGraph() {
+            document.getElementById('stats').innerHTML = '<div class="stat">⏳ Loading full graph...</div>';
+            
+            try {
+                // Get stats
+                const stats = await callAPI('neural_stats');
+                const statsText = stats.content[0].text;
+                const totalNodes = parseInt(statsText.match(/Total nodes: (\d+)/)[1]);
+                const totalEdges = parseInt(statsText.match(/Total edges: (\d+)/)[1]);
+                const totalEntities = parseInt(statsText.match(/Total entities: (\d+)/)[1]);
+                
+                // Load nodes in batches using search
+                const batchSize = 20;
+                const queries = [
+                    'knowledge graph semantic memory',
+                    'breakthrough milestone session',
+                    'technical debugging deployment',
+                    'self-reflection emotional growth',
+                    'project roadmap features',
+                    'critical knowledge protocol',
+                    'observations insights learning',
+                    'security API implementation'
+                ];
+                
+                const nodeMap = new Map();
+                let loadedCount = 0;
+                
+                for (const query of queries) {
+                    const results = await callAPI('search_memory', {
+                        query: query,
+                        limit: batchSize
+                    });
+                    
+                    // Parse results
+                    const blocks = results.content[0].text.split('\n\n');
+                    for (const block of blocks) {
+                        const match = block.match(/\[ID:(\d+)\] \[([^\]]+)\]/);
+                        if (match && !nodeMap.has(match[1])) {
+                            const id = match[1];
+                            const category = match[2];
+                            const lines = block.split('\n');
+                            const content = lines.slice(1).join(' ').trim().substring(0, 200);
+                            
+                            nodeMap.set(id, {
+                                id: id,
+                                category: category,
+                                content: content,
+                                label: `#${id}`
+                            });
+                            loadedCount++;
+                        }
+                    }
+                    
+                    // Update progress
+                    document.getElementById('stats').innerHTML = 
+                        `<div class="stat">⏳ Loaded ${loadedCount} nodes...</div>`;
+                }
+                
+                allNodes = Array.from(nodeMap.values());
+                
+                // Build links from get_graph calls for sample nodes
+                allLinks = [];
+                const sampleSize = Math.min(30, allNodes.length);
+                
+                console.log('Building links from', sampleSize, 'sample nodes...');
+                
+                for (let i = 0; i < sampleSize; i++) {
+                    const node = allNodes[i];
+                    try {
+                        const graphData = await callAPI('get_graph', { note_id: parseInt(node.id) });
+                        const connections = graphData.content[0].text;
+                        
+                        // Parse connections - two formats:
+                        // Format 1: → [entity] (weight: 0.60) #12: ...
+                        // Format 2: → [semantic] (weight: 0.52) #246: ...
+                        const lines = connections.split('\n');
+                        for (const line of lines) {
+                            const match = line.match(/→ \[(\w+)\] \(weight: ([\d.]+)\).*?#(\d+):/);
+                            if (match) {
+                                const linkType = match[1];
+                                const weight = parseFloat(match[2]);
+                                const targetId = match[3];
+                                
+                                if (nodeMap.has(targetId)) {
+                                    allLinks.push({
+                                        source: node.id,
+                                        target: targetId,
+                                        type: linkType,
+                                        weight: weight
+                                    });
+                                    if (i === 0) {
+                                        console.log('Sample link:', { linkType, weight, source: node.id, target: targetId });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) {
+                        // Skip if get_graph fails
+                    }
+                }
+                
+                console.log('Total links created:', allLinks.length);
+                console.log('Sample links:', allLinks.slice(0, 3));
+                
+                // Update stats display
+                document.getElementById('stats').innerHTML = `
+                    <div class="stat"><strong>Total:</strong> ${totalNodes} nodes, ${totalEdges} edges</div>
+                    <div class="stat"><strong>Loaded:</strong> ${allNodes.length} nodes, ${allLinks.length} links</div>
+                    <div class="stat"><strong>Entities:</strong> ${totalEntities}</div>
+                `;
+                
+                // Build category filter
+                const categories = [...new Set(allNodes.map(n => n.category))].sort();
+                const categoryFilter = document.getElementById('categoryFilter');
+                categoryFilter.innerHTML = '<option value="">All Categories</option>';
+                categories.forEach(cat => {
+                    const option = document.createElement('option');
+                    option.value = cat;
+                    option.textContent = `${cat} (${allNodes.filter(n => n.category === cat).length})`;
+                    categoryFilter.appendChild(option);
+                });
+                
+                // Build legend
+                buildLegend(categories);
+                
+                // Setup timeline
+                setupTimeline();
+                
+                // Initial render
+                applyFilters();
+                
+            } catch (error) {
+                document.getElementById('stats').innerHTML = 
+                    `<div class="stat" style="border-left-color: #ff006e;">❌ Error: ${error.message}</div>`;
+            }
+        }
+        
+        function buildLegend(categories) {
+            const legendContent = document.getElementById('legendContent');
+            legendContent.innerHTML = '';
+            
+            const topCategories = categories
+                .map(cat => ({
+                    name: cat,
+                    count: allNodes.filter(n => n.category === cat).length,
+                    color: getColor(cat)
+                }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 10);
+            
+            topCategories.forEach(cat => {
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = `
+                    <div class="legend-color" style="background: ${cat.color}"></div>
+                    <span>${cat.name} (${cat.count})</span>
+                `;
+                item.onclick = () => {
+                    document.getElementById('categoryFilter').value = cat.name;
+                    applyFilters();
+                };
+                legendContent.appendChild(item);
+            });
+        }
+        
+        function setupTimeline() {
+            if (allNodes.length === 0) return;
+            
+            // Use node IDs as proxy for time (sequential creation)
+            const ids = allNodes.map(n => parseInt(n.id)).sort((a, b) => a - b);
+            
+            if (ids.length === 0) return;
+            
+            window.timelineMinId = ids[0];
+            window.timelineMaxId = ids[ids.length - 1];
+            
+            // Estimate dates based on ID range (assume ~2 weeks of data)
+            const startDate = new Date('2026-01-22');
+            const endDate = new Date('2026-02-04');
+            
+            const startStr = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const endStr = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
+            document.getElementById('timelineStart').textContent = startStr;
+            document.getElementById('timelineEnd').textContent = endStr;
+            
+            window.timelineStartDate = startDate;
+            window.timelineEndDate = endDate;
+            
+            // Reset slider
+            document.getElementById('timelineSlider').value = 100;
+            updateTimelineInfo(100);
+        }
+        
+        function updateTimelineInfo(percent) {
+            const visibleCount = filteredNodes.length;
+            const totalCount = allNodes.length;
+            
+            if (percent >= 100) {
+                document.getElementById('timelineInfo').textContent = `Showing all ${visibleCount} notes`;
+            } else {
+                const cutoffDate = new Date(
+                    window.timelineStartDate.getTime() + 
+                    (window.timelineEndDate.getTime() - window.timelineStartDate.getTime()) * percent / 100
+                );
+                const dateStr = cutoffDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                document.getElementById('timelineInfo').textContent = `Up to ${dateStr} (${visibleCount}/${totalCount} notes)`;
+            }
+        }
+        
+        function applyFilters() {
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const showEntity = document.getElementById('showEntityLinks').checked;
+            const showSemantic = document.getElementById('showSemanticLinks').checked;
+            
+            // Filter nodes
+            filteredNodes = allNodes.filter(node => {
+                if (categoryFilter && node.category !== categoryFilter) return false;
+                return true;
+            });
+            
+            // Filter links
+            const nodeIds = new Set(filteredNodes.map(n => n.id));
+            filteredLinks = allLinks.filter(link => {
+                if (!nodeIds.has(link.source.id || link.source)) return false;
+                if (!nodeIds.has(link.target.id || link.target)) return false;
+                if (link.type === 'entity' && !showEntity) return false;
+                if (link.type === 'semantic' && !showSemantic) return false;
+                return true;
+            });
+            
+            renderGraph();
+        }
+        
+        function renderGraph() {
+            // Clear existing
+            g.selectAll('*').remove();
+            
+            if (filteredNodes.length === 0) {
+                document.getElementById('stats').innerHTML += 
+                    '<div class="stat" style="border-left-color: #ffbe0b;">⚠️ No nodes match filters</div>';
+                return;
+            }
+            
+            // Create simulation
+            simulation = d3.forceSimulation(filteredNodes)
+                .force('link', d3.forceLink(filteredLinks).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(40));
+            
+            // IMPORTANT: Draw links FIRST, then nodes on top
+            // This ensures nodes are clickable and links are behind
+            
+            // Draw links FIRST
+            const showWeights = document.getElementById('showLinkWeights').checked;
+            
+            const linkGroup = g.append('g').attr('class', 'links-layer');
+            
+            linkElements = linkGroup
+                .selectAll('line')
+                .data(filteredLinks)
+                .enter().append('line')
+                .attr('class', 'link')
+                .attr('stroke', d => showWeights ? getWeightColor(d.weight || 0.5) : '#666')
+                .attr('stroke-opacity', d => showWeights ? getWeightOpacity(d.weight || 0.5) : 0.3)
+                .attr('stroke-width', d => {
+                    const baseWidth = d.type === 'semantic' ? 2 : 1;
+                    return showWeights ? baseWidth + (d.weight || 0) * 2 : baseWidth;
+                })
+                .on('click', (event, d) => showLinkInfo(event, d))
+                .style('cursor', 'pointer');
+            
+            // Draw nodes AFTER links (on top)
+            const nodeGroup = g.append('g').attr('class', 'nodes-layer');
+            
+            nodeElements = nodeGroup
+                .selectAll('circle')
+                .data(filteredNodes)
+                .enter().append('circle')
+                .attr('class', 'node')
+                .attr('r', 8)
+                .attr('fill', d => getColor(d.category))
+                .on('click', (event, d) => showNodeInfo(d))
+                .on('mouseover', (event, d) => highlightNode(d))
+                .on('mouseout', () => clearHighlight())
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+            
+            // Draw labels LAST (on top of everything)
+            const labelGroup = g.append('g').attr('class', 'labels-layer');
+            
+            const showLabels = document.getElementById('showLabels').checked;
+            
+            labelElements = labelGroup
+                .selectAll('text')
+                .data(filteredNodes)
+                .enter().append('text')
+                .attr('class', 'node-label')
+                .text(d => d.label)
+                .attr('dy', 20)
+                .style('display', showLabels ? 'block' : 'none');
+            
+            // Update positions on tick
+            simulation.on('tick', () => {
+                linkElements
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                nodeElements
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                labelElements
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+        }
+        
+        function highlightNode(node) {
+            const connectedNodes = new Set();
+            const connectedLinks = new Set();
+            
+            allLinks.forEach(link => {
+                const sourceId = link.source.id || link.source;
+                const targetId = link.target.id || link.target;
+                
+                if (sourceId === node.id) {
+                    connectedNodes.add(targetId);
+                    connectedLinks.add(link);
+                } else if (targetId === node.id) {
+                    connectedNodes.add(sourceId);
+                    connectedLinks.add(link);
+                }
+            });
+            
+            nodeElements.classed('faded', d => d.id !== node.id && !connectedNodes.has(d.id));
+            nodeElements.classed('highlighted', d => d.id === node.id);
+            linkElements.classed('faded', d => !connectedLinks.has(d));
+            linkElements.classed('highlighted', d => connectedLinks.has(d));
+        }
+        
+        function clearHighlight() {
+            nodeElements.classed('faded', false);
+            nodeElements.classed('highlighted', false);
+            linkElements.classed('faded', false);
+            linkElements.classed('highlighted', false);
+        }
+        
+        function showNodeInfo(node) {
+            const safeId = escapeHtml(node.id);
+            const safeCategory = escapeHtml(node.category);
+            const safeContent = escapeHtml(node.content);
+            
+            document.getElementById('nodeInfo').innerHTML = `
+                <h3 style="margin-top: 20px; font-size: 14px;">Node #${safeId}</h3>
+                <div class="stat"><strong>Category:</strong> ${safeCategory}</div>
+                <div class="stat" style="line-height: 1.4; white-space: pre-wrap;">${safeContent}...</div>
+            `;
+        }
+        
+        function showLinkInfo(event, link) {
+            if (event) event.stopPropagation();
+            
+            const sourceId = escapeHtml(link.source.id || link.source);
+            const targetId = escapeHtml(link.target.id || link.target);
+            const weight = (link.weight || 0).toFixed(2);
+            const linkType = escapeHtml(link.type);
+            
+            console.log('showLinkInfo called:', { sourceId, targetId, weight, linkType });
+            
+            document.getElementById('nodeInfo').innerHTML = `
+                <h3 style="margin-top: 20px; font-size: 14px;">Link Info</h3>
+                <div class="stat"><strong>Type:</strong> ${linkType}</div>
+                <div class="stat"><strong>Weight:</strong> ${weight}</div>
+                <div class="stat"><strong>From:</strong> Node #${sourceId}</div>
+                <div class="stat"><strong>To:</strong> Node #${targetId}</div>
+                <div class="stat" style="margin-top: 10px; font-size: 10px; color: #888;">
+                    ${linkType === 'semantic' ? 'Semantic similarity between content' : 'Shared entities connection'}
+                </div>
+            `;
+        }
+        
+        function handleSearch() {
+            const query = document.getElementById('searchInput').value.toLowerCase().trim();
+            
+            // Input validation: max 100 chars, no special chars that could cause issues
+            if (query.length > 100) {
+                alert('Search query too long (max 100 characters)');
+                return;
+            }
+            
+            if (!query) {
+                clearHighlight();
+                return;
+            }
+            
+            const matches = new Set();
+            filteredNodes.forEach(node => {
+                if (node.content.toLowerCase().includes(query) || 
+                    node.category.toLowerCase().includes(query) ||
+                    node.id.includes(query)) {
+                    matches.add(node.id);
+                }
+            });
+            
+            nodeElements.classed('faded', d => !matches.has(d.id));
+            nodeElements.classed('highlighted', d => matches.has(d.id));
+        }
+        
+        function updateNodeSize(value) {
+            document.getElementById('nodeSizeValue').textContent = value;
+            if (nodeElements) {
+                nodeElements.attr('r', value);
+            }
+        }
+        
+        function toggleLabels() {
+            const show = document.getElementById('showLabels').checked;
+            if (labelElements) {
+                labelElements.style('display', show ? 'block' : 'none');
+            }
+        }
+        
+        function toggleLinkWeights() {
+            const show = document.getElementById('showLinkWeights').checked;
+            
+            // Show/hide weight legend
+            document.getElementById('weightLegend').style.display = show ? 'block' : 'none';
+            
+            // Re-render graph with new weight settings
+            if (filteredNodes.length > 0) {
+                renderGraph();
+            }
+        }
+        
+        function updateTimeline(value) {
+            if (!window.timelineMinId || !window.timelineMaxId) return;
+            
+            const percent = parseInt(value);
+            
+            if (percent >= 100) {
+                // Show all
+                applyFilters();
+                updateTimelineInfo(100);
+                return;
+            }
+            
+            // Calculate cutoff ID based on percentage
+            const cutoffId = window.timelineMinId + 
+                (window.timelineMaxId - window.timelineMinId) * percent / 100;
+            
+            // Filter nodes by ID
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const showEntity = document.getElementById('showEntityLinks').checked;
+            const showSemantic = document.getElementById('showSemanticLinks').checked;
+            
+            filteredNodes = allNodes.filter(node => {
+                if (categoryFilter && node.category !== categoryFilter) return false;
+                if (parseInt(node.id) > cutoffId) return false;
+                return true;
+            });
+            
+            // Filter links
+            const nodeIds = new Set(filteredNodes.map(n => n.id));
+            filteredLinks = allLinks.filter(link => {
+                if (!nodeIds.has(link.source.id || link.source)) return false;
+                if (!nodeIds.has(link.target.id || link.target)) return false;
+                if (link.type === 'entity' && !showEntity) return false;
+                if (link.type === 'semantic' && !showSemantic) return false;
+                return true;
+            });
+            
+            updateTimelineInfo(percent);
+            renderGraph();
+        }
+        
+        function resetZoom() {
+            svg.transition().duration(750).call(
+                zoom.transform,
+                d3.zoomIdentity
+            );
+        }
+        
+        function centerGraph() {
+            if (simulation) {
+                simulation.alpha(1).restart();
+            }
+        }
+        
+        // Timeline Autoplay
+        let autoplayInterval = null;
+        let autoplayDirection = 1;
+        
+        function toggleAutoPlay() {
+            const btn = document.getElementById('playPauseBtn');
+            
+            if (autoplayInterval) {
+                // Stop
+                clearInterval(autoplayInterval);
+                autoplayInterval = null;
+                btn.textContent = '▶ Play';
+            } else {
+                // Start
+                btn.textContent = '⏸ Pause';
+                const slider = document.getElementById('timelineSlider');
+                
+                autoplayInterval = setInterval(() => {
+                    let currentValue = parseInt(slider.value);
+                    
+                    // Move slider
+                    currentValue += autoplayDirection * 2;
+                    
+                    // Reverse at ends
+                    if (currentValue >= 100) {
+                        currentValue = 100;
+                        autoplayDirection = -1;
+                    } else if (currentValue <= 0) {
+                        currentValue = 0;
+                        autoplayDirection = 1;
+                    }
+                    
+                    slider.value = currentValue;
+                    updateTimeline(currentValue);
+                }, 200); // Update every 200ms
+            }
+        }
+        
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+        
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+        
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    </script>
+</body>
+</html>

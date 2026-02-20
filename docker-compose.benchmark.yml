@@ -1,0 +1,46 @@
+# Docker Compose for LOCOMO benchmark evaluation
+# Runs a separate HippoGraph instance with clean database
+# Does NOT interfere with production instance
+#
+# Usage:
+#   docker-compose -f docker-compose.benchmark.yml up -d
+#   python3 benchmark/locomo_adapter.py --all --api-url http://localhost:5003 --api-key benchmark_key
+#   docker-compose -f docker-compose.benchmark.yml down -v
+
+services:
+  hippograph-benchmark:
+    build: .
+    container_name: hippograph-benchmark
+    ports:
+      - "5003:5000"  # Different port from production (5001)
+    volumes:
+      - ./data/benchmark:/app/data  # Separate data directory
+      - ./src:/app/src
+    environment:
+      - DB_PATH=/app/data/benchmark.db
+      - FLASK_PORT=5000
+      - FLASK_DEBUG=false
+      - NEURAL_API_KEY=benchmark_key_locomo_2026
+      - ACTIVATION_ITERATIONS=3
+      - ACTIVATION_DECAY=0.7
+      - SIMILARITY_THRESHOLD=0.5
+      - HALF_LIFE_DAYS=30
+      - ENTITY_EXTRACTOR=spacy
+      - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - BLEND_ALPHA=${BLEND_ALPHA:-0.6}
+      - BLEND_GAMMA=${BLEND_GAMMA:-0.15}
+      - BLEND_DELTA=${BLEND_DELTA:-0.1}
+      - RERANK_ENABLED=true
+      - RERANK_TOP_N=20
+      - RERANK_WEIGHT=0.3
+      - USE_ANN_INDEX=true
+      - ANN_INDEX_TYPE=HNSW
+      - HNSW_M=32
+      - HNSW_EF_CONSTRUCTION=64
+      - HNSW_EF_SEARCH=32
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

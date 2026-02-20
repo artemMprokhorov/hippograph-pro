@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""
+HippoGraph CLI — command-line interface for Neural Memory.
+
+Usage:
+    hippograph search <query> [--limit N] [--category CAT] [--brief]
+    hippograph add <content> [--category CAT] [--importance LEVEL]
+    hippograph stats
+    hippograph search-stats
+    hippograph health
+
+Configuration via environment variables or ~/.hippograph.env:
+    HIPPOGRAPH_URL=http://192.168.0.212:5001
+    HIPPOGRAPH_API_KEY=your_key_here
+"""
+import argparse
+import json
+import os
+import sys
+import time
+from pathlib import Path
+
+try:
+    import requests
+except ImportError:
+    print("pip install requests")
+    sys.exit(1)
+
+
+def load_config():
+    """Load config from env or ~/.hippograph.env"""
+    env_file = Path.home() / ".hippograph.env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip())
+    
+    url = os.environ.get("HIPPOGRAPH_URL", "http://localhost:5001")
+    key = os.environ.get("HIPPOGRAPH_API_KEY", "")
+    
+    if not key:
+        print("⚠️  No API key. Set HIPPOGRAPH_API_KEY or create ~/.hippograph.env")
+        sys.exit(1)
+    
+    return url, key
+
+
+def api_call(method, endpoint, url, key, data=None):
+    """Make authenticated API call."""
+    sep = "&" if "?" in endpoint else "?"
+    full_url = f"{url}{endpoint}{sep}api_key={key}"
+    try:
+        t0 = time.perf_counter()
+        if method == "GET":
+            resp = requests.get(full_url, timeout=10)
+        else:
+            resp = requests.post(full_url, json=data, timeout=30)
+        elapsed = (time.perf_counter() - t0) * 1000
+        
+        if resp.status_code == 401:
+            print("❌ Authentication failed. Check HIPPOGRAPH_API_KEY")
+            sys.exit(1)
+        
+        return resp.json(), elapsed
+    except requests.ConnectionError:
+        print(f"❌ Cannot connect to {url}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
+
+
+def cmd_search(args, url, key):
+    """Search memory."""
+    data = {"query": args.query, "limit": args.limit}
+    if args.category:
+        data["category"] = args.category
+    if args.brief:
+        data["detail_mode"] = "brief"
+    
+    result, ms = api_call("POST", "/api/search", url, key, data)
+    
+    notes = result.get("results", [])
+    meta = result.get("metadata", {})
+    total = meta.get("total_activated", 0)
+    
+    if not notes:
+        print(f"No results for: {args.query}")
+        return
+    
+    print(f"🔍 {len(notes)} results ({total} activated) [{ms:.0f}ms]\n")
+    
+    for n in notes:
+        score = n.get("activation", 0)
+        cat = n.get("category", "")
+        nid = n.get("id", "?")
+        imp = n.get("importance", "normal")
+        
+        # Color score
+        if score >= 0.8:
+            score_str = f"\033[32m{score:.3f}\033[0m"  # green
+        elif score >= 0.5:
+            score_str = f"\033[33m{score:.3f}\033[0m"  # yellow
+        else:
+            score_str = f"\033[31m{score:.3f}\033[0m"  # red
+        
+        imp_marker = "🔴" if imp == "critical" else "⚪" if imp == "low" else ""
+        
+        print(f"  [{nid}] {score_str} [{cat}] {imp_marker}")
+        
+        content = n.get("content", "") or n.get("first_line", "")
+        if args.brief:
+            # Brief mode: API returns first_line instead of content
+            first_line = n.get("first_line", content.split("\n")[0][:120] if content else "")
+            print(f"    {first_line[:120]}")
+        else:
+            # Wrap at ~100 chars, indent
+            lines = content.split("\n")
+            for line in lines[:8]:
+                print(f"    {line[:120]}")
+            if len(lines) > 8:
+                print(f"    ... ({len(lines)-8} more lines)")
+        print()
+
+
+def cmd_add(args, url, key):
+    """Add a note."""
+    data = {
+        "content": args.content,
+        "category": args.category or "general",
+    }
+    
+    result, ms = api_call("POST", "/api/add_note", url, key, data)
+    
+    nid = result.get("node_id", result.get("id", "?"))
+    entities = result.get("entity_links", 0)
+    
+    print(f"✅ Note #{nid} added [{ms:.0f}ms]")
+    print(f"   Category: {data['category']}")
+    print(f"   Entities linked: {entities}")
+
+
+def cmd_stats(args, url, key):
+    """Show memory statistics."""
+    result, ms = api_call("GET", "/health", url, key)
+    print(f"🧠 HippoGraph [{ms:.0f}ms]\n")
+    print(f"  Status: {result.get('status', '?')}")
+    print(f"  Version: {result.get('version', '?')}")
+    
+    # Get graph data summary
+    result2, ms2 = api_call("GET", "/api/graph-data?brief=true", url, key)
+    nodes = result2.get("nodes", [])
+    edges = result2.get("edges", [])
+    
+    categories = {}
+    for n in nodes:
+        cat = n.get("category", "unknown")
+        categories[cat] = categories.get(cat, 0) + 1
+    
+    print(f"\n  📊 Graph:")
+    print(f"    Nodes: {len(nodes)}")
+    print(f"    Edges: {len(edges)}")
+    print(f"    Categories: {len(categories)}")
+    
+    # Top categories
+    top_cats = sorted(categories.items(), key=lambda x: x[1], reverse=True)[:10]
+    print(f"\n  📁 Top categories:")
+    for cat, cnt in top_cats:
+        bar = "█" * min(cnt, 40)
+        print(f"    {cat:25s} {cnt:3d} {bar}")
+
+
+def cmd_search_stats(args, url, key):
+    """Show search quality stats (calls search_logger)."""
+    # Call via MCP endpoint would be complex, so call the module directly
+    # For now, do a search to trigger logging, then report
+    print("📊 Search stats available via MCP tool 'search_stats' in Claude.ai")
+    print("   Or query directly: SELECT * FROM search_logs in memory.db")
+
+
+def cmd_health(args, url, key):
+    """Quick health check."""
+    result, ms = api_call("GET", "/health", url, key)
+    status = result.get("status", "unknown")
+    version = result.get("version", "?")
+    if status == "ok":
+        print(f"✅ HippoGraph v{version} — {ms:.0f}ms")
+    else:
+        print(f"❌ Status: {status} — {ms:.0f}ms")
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog="hippograph",
+        description="HippoGraph CLI — Neural Memory command-line interface"
+    )
+    sub = parser.add_subparsers(dest="command", help="Available commands")
+    
+    # search
+    p_search = sub.add_parser("search", aliases=["s"], help="Search memory")
+    p_search.add_argument("query", nargs="+", help="Search query")
+    p_search.add_argument("-n", "--limit", type=int, default=5, help="Max results (default: 5)")
+    p_search.add_argument("-c", "--category", help="Filter by category")
+    p_search.add_argument("-b", "--brief", action="store_true", help="Brief output (first line only)")
+    
+    # add
+    p_add = sub.add_parser("add", aliases=["a"], help="Add a note")
+    p_add.add_argument("content", nargs="+", help="Note content")
+    p_add.add_argument("-c", "--category", help="Category (default: general)")
+    
+    # stats
+    sub.add_parser("stats", help="Memory statistics")
+    
+    # search-stats
+    sub.add_parser("search-stats", help="Search quality monitoring")
+    
+    # health
+    sub.add_parser("health", aliases=["h"], help="Health check")
+    
+    args = parser.parse_args()
+    
+    if not args.command:
+        parser.print_help()
+        sys.exit(0)
+    
+    url, key = load_config()
+    
+    # Join multi-word arguments
+    if hasattr(args, "query"):
+        args.query = " ".join(args.query)
+    if hasattr(args, "content"):
+        args.content = " ".join(args.content)
+    
+    commands = {
+        "search": cmd_search, "s": cmd_search,
+        "add": cmd_add, "a": cmd_add,
+        "stats": cmd_stats,
+        "search-stats": cmd_search_stats,
+        "health": cmd_health, "h": cmd_health,
+    }
+    
+    fn = commands.get(args.command)
+    if fn:
+        fn(args, url, key)
+    else:
+        parser.print_help()
+
+
+if __name__ == "__main__":
+    main()

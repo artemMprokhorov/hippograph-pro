@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://d3js.org https://cdn.socket.io; style-src 'self' 'unsafe-inline'; connect-src 'self' http: ws:; img-src 'self' data:;">
+    <title>HippoGraph</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        /* ========== LOGIN SCREEN ========== */
+        #login-screen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0a0a0a;
+            display: flex; align-items: center; justify-content: center;
+            z-index: 10000;
+        }
+        .login-card {
+            text-align: center; max-width: 380px; width: 90%;
+        }
+        .login-logo {
+            width: 180px; height: 180px; margin: 0 auto 16px;
+            opacity: 0.9;
+        }
+        .login-logo img { width: 100%; height: 100%; object-fit: contain; }
+        .login-title {
+            font-size: 28px; font-weight: 700; color: #e0e0e0;
+            letter-spacing: 1px; margin-bottom: 4px;
+        }
+        .login-subtitle {
+            font-size: 13px; color: #555; margin-bottom: 32px;
+            letter-spacing: 0.5px;
+        }
+        .login-field {
+            width: 100%; padding: 12px 16px; background: #111;
+            border: 1px solid #2a2a2a; border-radius: 8px;
+            color: #e0e0e0; font-size: 14px; margin-bottom: 12px;
+            outline: none; transition: border-color 0.2s;
+        }
+        .login-field:focus { border-color: #4a9eff; }
+        .login-field::placeholder { color: #444; }
+        .login-remember {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; margin: 8px 0 20px; font-size: 13px; color: #666;
+            cursor: pointer; user-select: none;
+        }
+        .login-remember input[type="checkbox"] {
+            accent-color: #4a9eff; cursor: pointer;
+        }
+        .login-btn {
+            width: 100%; padding: 12px; background: #4a9eff;
+            color: #fff; border: none; border-radius: 8px;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s;
+        }
+        .login-btn:hover { background: #5aa9ff; }
+        .login-btn:active { transform: scale(0.98); }
+        .login-btn:disabled { background: #333; color: #666; cursor: not-allowed; }
+        .login-error {
+            color: #ff6b6b; font-size: 12px; margin-top: 12px;
+            min-height: 18px;
+        }
+        .login-version {
+            font-size: 10px; color: #333; margin-top: 32px;
+        }
+
+        /* ========== MAIN APP (hidden until login) ========== */
+        #app { display: none; }
+
+        /* Collapsible Panels */
+        .panel {
+            position: absolute;
+            background: rgba(20, 20, 20, 0.95);
+            border-radius: 12px;
+            border: 1px solid #333;
+            z-index: 1000;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+            transition: height 0.3s ease;
+        }
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            user-select: none;
+            border-bottom: 1px solid #333;
+        }
+        .panel-header h3 {
+            margin: 0;
+            color: #4a9eff;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .panel-toggle {
+            color: #aaa; font-size: 18px; font-weight: bold;
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            background: #2a2a2a; border: 1px solid #555;
+            border-radius: 6px; cursor: pointer; flex-shrink: 0;
+            transition: all 0.2s;
+        }
+        .panel-toggle:hover { background: #4a9eff; color: #fff; border-color: #4a9eff; }
+        .panel.collapsed .panel-body { display: none; }
+        .panel.collapsed .panel-header { border-bottom: none; }
+        .panel-body { padding: 16px; }
+
+        /* Panel positions */
+        #controls { top: 15px; left: 15px; max-width: 300px; }
+        #info { top: 15px; right: 15px; max-width: 340px; max-height: calc(100vh - 30px); }
+        #info .panel-body { overflow-y: auto; max-height: calc(100vh - 100px); }
+        #info .panel-body::-webkit-scrollbar { width: 8px; }
+        #info .panel-body::-webkit-scrollbar-track { background: #1a1a1a; border-radius: 4px; }
+        #info .panel-body::-webkit-scrollbar-thumb { background: #4a9eff; border-radius: 4px; }
+        #legend { bottom: 15px; right: 15px; max-width: 220px; max-height: 300px; }
+        #legend .panel-body { overflow-y: auto; max-height: 250px; }
+        #timeline { bottom: 15px; left: 50%; transform: translateX(-50%); width: 400px; }
+
+        /* Shared UI */
+        .stat {
+            margin: 8px 0; font-size: 13px; padding: 8px;
+            background: #1a1a1a; border-radius: 6px; border-left: 3px solid #4a9eff;
+        }
+        .stat strong { color: #4a9eff; }
+        label {
+            display: block; margin: 8px 0 5px 0; font-size: 12px;
+            color: #aaa; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        button {
+            background: linear-gradient(135deg, #2a2a2a 0%, #1a1a1a 100%);
+            color: #fff; border: 1px solid #444; padding: 10px 16px;
+            border-radius: 6px; cursor: pointer; font-size: 13px;
+            transition: all 0.2s; width: 100%; margin: 4px 0;
+        }
+        button:hover { background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%); border-color: #4a9eff; }
+        button:active { transform: scale(0.98); }
+        button.primary { background: linear-gradient(135deg, #4a9eff 0%, #357abd 100%); border-color: #4a9eff; }
+        button.primary:hover { background: linear-gradient(135deg, #5aa9ff 0%, #458acf 100%); }
+        select, input[type="text"], input[type="range"] {
+            width: 100%; padding: 8px; background: #1a1a1a; border: 1px solid #333;
+            border-radius: 6px; color: #e0e0e0; font-size: 13px; margin-top: 5px;
+        }
+        select:focus, input:focus { outline: none; border-color: #4a9eff; }
+        input[type="range"] { padding: 0; height: 6px; }
+
+        /* Graph */
+        #link-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+        #graph { position: absolute; top: 0; left: 0; }
+        .node { cursor: pointer; stroke: #000; stroke-width: 2px; }
+        .node:hover { stroke: #4a9eff; stroke-width: 3px; }
+        .node.highlighted { stroke: #ff6b35; stroke-width: 4px; }
+        .node.faded { opacity: 0.15; }
+        .link.faded { opacity: 0.05; }
+        .link.highlighted { stroke: #4a9eff; stroke-opacity: 0.8; stroke-width: 2px; }
+        .node-label { font-size: 10px; fill: #aaa; pointer-events: none; text-anchor: middle; }
+        .legend-item {
+            display: flex; align-items: center; gap: 8px; margin: 5px 0;
+            cursor: pointer; padding: 4px; border-radius: 4px;
+        }
+        .legend-item:hover { background: #2a2a2a; }
+        .legend-color { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #000; }
+        .timeline-label { display: flex; justify-content: space-between; font-size: 11px; color: #aaa; margin-top: 5px; }
+        #weightLegend {
+            position: absolute; bottom: 230px; left: 15px;
+            background: rgba(20, 20, 20, 0.95); padding: 15px;
+            border-radius: 12px; border: 1px solid #333; font-size: 11px; max-width: 200px;
+        }
+        .weight-gradient-bar {
+            width: 100%; height: 20px;
+            background: linear-gradient(to right, #333 0%, #4a9eff 100%);
+            border-radius: 4px; margin: 8px 0; border: 1px solid #555;
+        }
+        .weight-labels { display: flex; justify-content: space-between; font-size: 9px; color: #888; }
+        #fps { position: absolute; top: 5px; left: 50%; transform: translateX(-50%);
+            color: #666; font-size: 10px; z-index: 999; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <!-- ========== LOGIN SCREEN ========== -->
+    <div id="login-screen">
+        <div class="login-card">
+            <div class="login-logo"><object data="logo.svg" type="image/svg+xml" style="width:100%;height:100%;"><img src="logo.svg" alt="HippoGraph"></object></div>
+            <div class="login-title">HippoGraph</div>
+            <div class="login-subtitle">Neural Memory Visualization</div>
+            <input type="text" id="loginUrl" class="login-field" placeholder="API Endpoint URL" value="http://localhost:5001/sse2">
+            <input type="password" id="loginKey" class="login-field" placeholder="API Key">
+            <label class="login-remember">
+                <input type="checkbox" id="loginRemember" checked>
+                Remember for 7 days
+            </label>
+            <button class="login-btn" id="loginBtn" onclick="doLogin()">Connect</button>
+            <div class="login-error" id="loginError"></div>
+            <div class="login-version">v2.0 &middot; Zero LLM Cost &middot; Spreading Activation</div>
+        </div>
+    </div>
+
+    <!-- ========== MAIN APP ========== -->
+    <div id="app">
+        <!-- Controls Panel (left) -->
+        <div id="controls" class="panel">
+            <div class="panel-header">
+                <h3>🧠 HippoGraph</h3>
+                <span class="panel-toggle" onclick="togglePanel('controls')">−</span>
+            </div>
+            <div class="panel-body">
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button class="primary" onclick="loadFullGraph()">Load Full Graph</button>
+                    <button onclick="refreshData()" style="background: #4a9eff; color: white; border: 1px solid #6bb3ff;">🔄</button>
+                </div>
+                <div class="control-group" style="border-top: 1px solid #333; padding-top: 12px;">
+                    <label>Search</label>
+                    <input type="text" id="searchInput" placeholder="Search notes..." onkeyup="handleSearch()">
+                </div>
+                <div class="control-group" style="border-top: 1px solid #333; padding-top: 12px;">
+                    <label>Filter by Category</label>
+                    <select id="categoryFilter" onchange="applyFilters()"><option value="">All Categories</option></select>
+                </div>
+                <div class="control-group" style="border-top: 1px solid #333; padding-top: 12px;">
+                    <label>Node Size: <span id="nodeSizeValue">8</span>px</label>
+                    <input type="range" id="nodeSize" min="4" max="20" value="8" oninput="updateNodeSize(this.value)">
+                </div>
+                <div class="control-group" style="border-top: 1px solid #333; padding-top: 12px;">
+                    <label><input type="checkbox" id="showLabels" checked onchange="toggleLabels()"> Show Node Labels</label>
+                    <label><input type="checkbox" id="showEntityLinks" checked onchange="applyFilters()"> Show Entity Links</label>
+                    <label><input type="checkbox" id="showSemanticLinks" checked onchange="applyFilters()"> Show Semantic Links</label>
+                    <label><input type="checkbox" id="showLinkWeights" onchange="toggleLinkWeights()"> Show Link Weights</label>
+                </div>
+                <button onclick="fitToScreen()">Fit to Screen</button>
+                <button onclick="centerGraph()">Re-layout</button>
+                <button onclick="doLogout()" style="margin-top: 12px; border-color: #555; color: #888; font-size: 11px;">Disconnect</button>
+            </div>
+        </div>
+
+        <!-- Stats Panel (right top) -->
+        <div id="info" class="panel">
+            <div class="panel-header">
+                <h3>Graph Statistics</h3>
+                <span class="panel-toggle" onclick="togglePanel('info')">−</span>
+            </div>
+            <div class="panel-body">
+                <div id="stats"><div class="stat">Loading graph...</div></div>
+                <div id="nodeInfo"></div>
+            </div>
+        </div>
+
+        <!-- Categories Legend (right bottom) -->
+        <div id="legend" class="panel">
+            <div class="panel-header">
+                <h3 style="font-size: 13px;">Categories</h3>
+                <span class="panel-toggle" onclick="togglePanel('legend')">−</span>
+            </div>
+            <div class="panel-body"><div id="legendContent"></div></div>
+        </div>
+
+        <!-- Weight Legend -->
+        <div id="weightLegend" style="display: none;">
+            <h3 style="font-size: 13px; margin-bottom: 10px;">Link Weights</h3>
+            <div class="weight-gradient-bar"></div>
+            <div class="weight-labels"><span>Weak (0.0)</span><span>Strong (1.0)</span></div>
+        </div>
+
+        <!-- Timeline Panel (bottom center) -->
+        <div id="timeline" class="panel">
+            <div class="panel-header">
+                <h3 style="font-size: 13px;">Timeline Filter</h3>
+                <span class="panel-toggle" onclick="togglePanel('timeline')">−</span>
+            </div>
+            <div class="panel-body" style="padding: 10px 16px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <input type="range" id="timelineSlider" min="0" max="100" value="100" oninput="updateTimeline(this.value)" style="flex: 1;">
+                    <button id="playPauseBtn" onclick="toggleAutoPlay()" style="width: auto; padding: 4px 12px; font-size: 11px; margin: 0;">▶ Play</button>
+                </div>
+                <div class="timeline-label">
+                    <span id="timelineStart">Loading...</span>
+                    <span id="timelineEnd">Now</span>
+                </div>
+                <div style="font-size: 10px; color: #aaa; margin-top: 5px; text-align: center;">
+                    <span id="timelineInfo">Showing all notes</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="fps"></div>
+        <canvas id="link-canvas"></canvas>
+        <svg id="graph"></svg>
+    </div>
+
+    <script>
+        // === Security ===
+        function escapeHtml(unsafe) {
+            if (!unsafe) return '';
+            return unsafe.toString()
+                .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // === Panel Collapse ===
+        function togglePanel(id) {
+            const panel = document.getElementById(id);
+            panel.classList.toggle('collapsed');
+            const btn = panel.querySelector('.panel-toggle');
+            btn.textContent = panel.classList.contains('collapsed') ? '+' : '−';
+        }
+
+        // === Configuration ===
+        let API_URL = '';
+        let API_KEY = '';
+
+        // === Login / Logout ===
+        function doLogin() {
+            const url = document.getElementById('loginUrl').value.trim();
+            const key = document.getElementById('loginKey').value.trim();
+            const errEl = document.getElementById('loginError');
+            errEl.textContent = '';
+            if (!url || !key) { errEl.textContent = 'Both fields are required'; return; }
+            try { new URL(url); } catch (e) { errEl.textContent = 'Invalid URL format'; return; }
+
+            API_URL = url;
+            API_KEY = key;
+
+            if (document.getElementById('loginRemember').checked) {
+                const expiry = Date.now() + 7 * 24 * 3600 * 1000;
+                localStorage.setItem('hippograph_api_url', API_URL);
+                localStorage.setItem('hippograph_api_key', API_KEY);
+                localStorage.setItem('hippograph_expiry', expiry.toString());
+            }
+
+            document.getElementById('loginBtn').disabled = true;
+            document.getElementById('loginBtn').textContent = 'Connecting...';
+
+            // Test connection then show app
+            const apiBase = window.location.origin;
+            fetch(apiBase + '/api/graph-data?api_key=' + API_KEY + '&brief=true', { cache: 'no-store' })
+                .then(function(r) {
+                    if (!r.ok) throw new Error(r.status === 401 ? 'Invalid API key' : 'Server error ' + r.status);
+                    return r.json();
+                })
+                .then(function() {
+                    document.getElementById('login-screen').style.display = 'none';
+                    document.getElementById('app').style.display = 'block';
+                    initApp();
+                    loadFullGraph();
+                })
+                .catch(function(e) {
+                    errEl.textContent = e.message;
+                    document.getElementById('loginBtn').disabled = false;
+                    document.getElementById('loginBtn').textContent = 'Connect';
+                });
+        }
+
+        function doLogout() {
+            localStorage.removeItem('hippograph_api_url');
+            localStorage.removeItem('hippograph_api_key');
+            localStorage.removeItem('hippograph_expiry');
+            if (socket) { socket.disconnect(); socket = null; }
+            if (window._pollInterval) clearInterval(window._pollInterval);
+            wsConnected = false;
+            API_URL = ''; API_KEY = '';
+            document.getElementById('app').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'flex';
+            document.getElementById('loginBtn').disabled = false;
+            document.getElementById('loginBtn').textContent = 'Connect';
+            document.getElementById('loginError').textContent = '';
+        }
+
+        // Auto-login from saved credentials
+        window.addEventListener('DOMContentLoaded', function() {
+            const savedUrl = localStorage.getItem('hippograph_api_url');
+            const savedKey = localStorage.getItem('hippograph_api_key');
+            const expiry = localStorage.getItem('hippograph_expiry');
+            if (expiry && Date.now() > parseInt(expiry)) {
+                localStorage.removeItem('hippograph_api_url');
+                localStorage.removeItem('hippograph_api_key');
+                localStorage.removeItem('hippograph_expiry');
+                return;
+            }
+            if (savedUrl) document.getElementById('loginUrl').value = savedUrl;
+            if (savedKey) document.getElementById('loginKey').value = savedKey;
+            if (savedUrl && savedKey) doLogin(); // Auto-connect
+        });
+
+        // === State ===
+        let allNodes = [], allLinks = [], filteredNodes = [], filteredLinks = [];
+        let simulation = null, nodeElements = null, labelElements = null;
+        let currentTransform = d3.zoomIdentity;
+        let width, height, canvas, ctx, svg, g, zoomBehavior;
+
+        function initApp() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas = document.getElementById('link-canvas');
+            canvas.width = width;
+            canvas.height = height;
+            ctx = canvas.getContext('2d');
+            svg = d3.select('#graph').attr('width', width).attr('height', height);
+            g = svg.append('g');
+            zoomBehavior = d3.zoom().scaleExtent([0.02, 10]).on('zoom', function(event) {
+                currentTransform = event.transform;
+                g.attr('transform', currentTransform);
+                drawLinks();
+            });
+            svg.call(zoomBehavior);
+            initLiveUpdates();
+        }
+
+        // === Color ===
+        const categoryColors = {
+            'milestone': '#4a9eff', 'self-reflection': '#9d4edd',
+            'technical-insight': '#06ffa5', 'breakthrough': '#ff6b35',
+            'session-end': '#f72585', 'self-identity': '#ffd60a',
+            'critical-knowledge': '#ff006e', 'security-solution': '#fb5607',
+            'observations': '#8338ec', 'self-awareness': '#3a86ff',
+            'gratitude': '#ffbe0b', 'project-status': '#06ffa5',
+            'default': '#666'
+        };
+        function getColor(cat) { return categoryColors[cat] || categoryColors.default; }
+        function getWeightColor(w) {
+            w = Math.max(0, Math.min(1, w));
+            var r = Math.round(0x33 + (0x4a - 0x33) * w);
+            var g = Math.round(0x33 + (0x9e - 0x33) * w);
+            var b = Math.round(0x33 + (0xff - 0x33) * w);
+            return 'rgb(' + r + ',' + g + ',' + b + ')';
+        }
+        function getWeightOpacity(w) { return 0.15 + w * 0.5; }
+
+        // === Draw Links on Canvas ===
+        function drawLinks() {
+            if (!ctx) return;
+            ctx.clearRect(0, 0, width, height);
+            ctx.save();
+            ctx.translate(currentTransform.x, currentTransform.y);
+            ctx.scale(currentTransform.k, currentTransform.k);
+            var showWeights = document.getElementById('showLinkWeights').checked;
+            for (var i = 0; i < filteredLinks.length; i++) {
+                var d = filteredLinks[i];
+                if (!d.source.x || !d.target.x) continue;
+                ctx.beginPath();
+                ctx.moveTo(d.source.x, d.source.y);
+                ctx.lineTo(d.target.x, d.target.y);
+                if (showWeights) {
+                    ctx.strokeStyle = getWeightColor(d.weight || 0.5);
+                    ctx.globalAlpha = getWeightOpacity(d.weight || 0.5);
+                    ctx.lineWidth = d.type === 'semantic' ? 1.5 : 0.8;
+                } else {
+                    ctx.strokeStyle = '#444';
+                    ctx.globalAlpha = 0.2;
+                    ctx.lineWidth = d.type === 'semantic' ? 1 : 0.5;
+                }
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        function drawLinksHighlighted(nodeId, connected) {
+            ctx.clearRect(0, 0, width, height);
+            ctx.save();
+            ctx.translate(currentTransform.x, currentTransform.y);
+            ctx.scale(currentTransform.k, currentTransform.k);
+            for (var i = 0; i < filteredLinks.length; i++) {
+                var d = filteredLinks[i];
+                if (!d.source.x || !d.target.x) continue;
+                var s = d.source.id, t = d.target.id;
+                var isConn = s === nodeId || t === nodeId;
+                ctx.beginPath();
+                ctx.moveTo(d.source.x, d.source.y);
+                ctx.lineTo(d.target.x, d.target.y);
+                ctx.strokeStyle = isConn ? '#4a9eff' : '#444';
+                ctx.globalAlpha = isConn ? 0.8 : 0.05;
+                ctx.lineWidth = isConn ? 2 : 0.5;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+
+        // === Load Graph ===
+        async function loadFullGraph() {
+            document.getElementById('stats').innerHTML = '<div class="stat">⏳ Loading...</div>';
+            try {
+                var apiBase = window.location.origin;
+                var response = await fetch(apiBase + '/api/graph-data?api_key=' + API_KEY + '&brief=true', { cache: 'no-store' });
+                if (!response.ok) {
+                    if (response.status === 401) throw new Error('Invalid API key');
+                    throw new Error('HTTP ' + response.status);
+                }
+                var data = await response.json();
+                var nodeMap = new Map();
+                data.nodes.forEach(function(n) {
+                    nodeMap.set(String(n.id), {
+                        id: String(n.id), category: n.category || 'general',
+                        content: n.preview || n.content || '',
+                        label: '#' + n.id, importance: n.importance || 'normal',
+                        emotional_tone: n.emotional_tone || '',
+                        emotional_intensity: n.emotional_intensity || 0,
+                        timestamp: n.timestamp || '', full_length: n.full_length || 0
+                    });
+                });
+                allNodes = Array.from(nodeMap.values());
+                allLinks = [];
+                data.edges.forEach(function(e) {
+                    var s = String(e.source), t = String(e.target);
+                    if (nodeMap.has(s) && nodeMap.has(t))
+                        allLinks.push({ source: s, target: t, type: e.type || 'semantic', weight: e.weight || 0.5 });
+                });
+                document.getElementById('stats').innerHTML =
+                    '<div class="stat"><strong>Total:</strong> ' + data.stats.total_nodes + ' nodes, ' + data.stats.total_edges + ' edges</div>' +
+                    '<div class="stat"><strong>Loaded:</strong> ' + allNodes.length + ' nodes, ' + allLinks.length + ' links</div>';
+                var categories = [];
+                var catSet = {};
+                allNodes.forEach(function(n) { catSet[n.category] = true; });
+                categories = Object.keys(catSet).sort();
+                var sel = document.getElementById('categoryFilter');
+                sel.innerHTML = '<option value="">All Categories</option>';
+                categories.forEach(function(cat) {
+                    var opt = document.createElement('option');
+                    opt.value = cat;
+                    opt.textContent = cat + ' (' + allNodes.filter(function(n) { return n.category === cat; }).length + ')';
+                    sel.appendChild(opt);
+                });
+                buildLegend(categories);
+                setupTimeline();
+                if (allLinks.length > 10000) {
+                    allLinks.sort(function(a, b) { return (b.weight || 0) - (a.weight || 0); });
+                    allLinks = allLinks.slice(0, 10000);
+                }
+                applyFilters();
+            } catch (error) {
+                document.getElementById('stats').innerHTML =
+                    '<div class="stat" style="border-left-color: #ff006e;">Error: ' + escapeHtml(error.message) + '</div>';
+            }
+        }
+
+        async function refreshData() { await loadFullGraph(); }
+
+        // === Node Detail ===
+        async function fetchNodeDetail(nodeId) {
+            try {
+                var r = await fetch(window.location.origin + '/api/node/' + nodeId + '?api_key=' + API_KEY);
+                if (!r.ok) return null;
+                return await r.json();
+            } catch (e) { return null; }
+        }
+
+        async function showNodeInfo(node) {
+            var safeId = escapeHtml(node.id), safeCat = escapeHtml(node.category);
+            var safeContent = escapeHtml(node.content);
+            var safeTone = escapeHtml(node.emotional_tone || '');
+            var imp = escapeHtml(node.importance || 'normal');
+            var meta = '';
+            if (imp !== 'normal') meta += '<div class="stat"><strong>Importance:</strong> ' + imp + '</div>';
+            if (safeTone) meta += '<div class="stat"><strong>Tone:</strong> ' + safeTone + '</div>';
+            if (node.emotional_intensity > 0) meta += '<div class="stat"><strong>Intensity:</strong> ' + node.emotional_intensity + '/10</div>';
+            document.getElementById('nodeInfo').innerHTML =
+                '<h3 style="margin-top:20px;font-size:14px;">Node #' + safeId + '</h3>' +
+                '<div class="stat"><strong>Category:</strong> ' + safeCat + '</div>' + meta +
+                '<div class="stat" style="line-height:1.4;white-space:pre-wrap;">' + safeContent + '</div>' +
+                '<div class="stat" style="color:#666;font-size:11px;">Loading full content...</div>';
+            document.getElementById('info').classList.remove('collapsed');
+            var detail = await fetchNodeDetail(node.id);
+            if (detail) {
+                document.getElementById('nodeInfo').innerHTML =
+                    '<h3 style="margin-top:20px;font-size:14px;">Node #' + safeId + '</h3>' +
+                    '<div class="stat"><strong>Category:</strong> ' + safeCat + '</div>' + meta +
+                    '<div class="stat" style="font-size:11px;"><strong>Created:</strong> ' + escapeHtml(detail.timestamp || '') + '</div>' +
+                    '<div class="stat" style="line-height:1.4;white-space:pre-wrap;max-height:400px;overflow-y:auto;">' + escapeHtml(detail.content || '') + '</div>';
+            }
+        }
+
+        // === Legend ===
+        function buildLegend(categories) {
+            var el = document.getElementById('legendContent');
+            el.innerHTML = '';
+            categories.map(function(cat) {
+                return { name: cat, count: allNodes.filter(function(n) { return n.category === cat; }).length, color: getColor(cat) };
+            }).sort(function(a, b) { return b.count - a.count; }).slice(0, 15).forEach(function(cat) {
+                var item = document.createElement('div');
+                item.className = 'legend-item';
+                item.innerHTML = '<div class="legend-color" style="background:' + cat.color + '"></div><span>' + cat.name + ' (' + cat.count + ')</span>';
+                item.onclick = function() { document.getElementById('categoryFilter').value = cat.name; applyFilters(); };
+                el.appendChild(item);
+            });
+        }
+
+        // === Timeline ===
+        function setupTimeline() {
+            if (allNodes.length === 0) return;
+            var ids = allNodes.map(function(n) { return parseInt(n.id); }).sort(function(a,b) { return a-b; });
+            window.timelineMinId = ids[0];
+            window.timelineMaxId = ids[ids.length - 1];
+            document.getElementById('timelineSlider').value = 100;
+            updateTimelineInfo(100);
+        }
+        function updateTimelineInfo(percent) {
+            var vis = filteredNodes.length, total = allNodes.length;
+            document.getElementById('timelineInfo').textContent = percent >= 100
+                ? 'Showing all ' + vis + ' notes'
+                : vis + '/' + total + ' notes';
+        }
+
+        // === Filters ===
+        function applyFilters() {
+            var catFilter = document.getElementById('categoryFilter').value;
+            var showEntity = document.getElementById('showEntityLinks').checked;
+            var showSemantic = document.getElementById('showSemanticLinks').checked;
+            filteredNodes = allNodes.filter(function(n) { return !catFilter || n.category === catFilter; });
+            var nodeIds = new Set(filteredNodes.map(function(n) { return n.id; }));
+            filteredLinks = allLinks.filter(function(link) {
+                if (!nodeIds.has(link.source.id || link.source)) return false;
+                if (!nodeIds.has(link.target.id || link.target)) return false;
+                if (link.type === 'entity' && !showEntity) return false;
+                if (link.type === 'semantic' && !showSemantic) return false;
+                return true;
+            });
+            renderGraph();
+        }
+
+        // === RENDER GRAPH ===
+        function renderGraph() {
+            if (!g) return;
+            g.selectAll('*').remove();
+            if (filteredNodes.length === 0) return;
+            var nodeCount = filteredNodes.length;
+            var chargeStrength = nodeCount > 300 ? -150 : -300;
+            var linkDist = nodeCount > 300 ? 60 : 100;
+            var collideR = nodeCount > 300 ? 20 : 40;
+            var decayRate = nodeCount > 300 ? 0.05 : 0.0228;
+            simulation = d3.forceSimulation(filteredNodes)
+                .force('link', d3.forceLink(filteredLinks).id(function(d) { return d.id; }).distance(linkDist))
+                .force('charge', d3.forceManyBody().strength(chargeStrength).theta(0.9))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(collideR))
+                .alphaDecay(decayRate);
+            var nodeGroup = g.append('g').attr('class', 'nodes-layer');
+            var nodeSize = parseInt(document.getElementById('nodeSize').value) || 8;
+            nodeElements = nodeGroup.selectAll('circle')
+                .data(filteredNodes).enter().append('circle')
+                .attr('class', 'node').attr('r', nodeSize)
+                .attr('fill', function(d) { return getColor(d.category); })
+                .on('click', function(event, d) { showNodeInfo(d); })
+                .on('mouseover', function(event, d) { highlightNode(d); })
+                .on('mouseout', function() { clearHighlight(); })
+                .call(d3.drag().on('start', dragstarted).on('drag', dragged).on('end', dragended));
+            var labelGroup = g.append('g').attr('class', 'labels-layer');
+            var showLabels = document.getElementById('showLabels').checked;
+            labelElements = labelGroup.selectAll('text')
+                .data(filteredNodes).enter().append('text')
+                .attr('class', 'node-label').text(function(d) { return d.label; }).attr('dy', 20)
+                .style('display', showLabels ? 'block' : 'none');
+            var tickCount = 0;
+            simulation.on('tick', function() {
+                tickCount++;
+                if (nodeCount < 300 || tickCount % 2 === 0) drawLinks();
+                nodeElements.attr('cx', function(d) { return d.x; }).attr('cy', function(d) { return d.y; });
+                labelElements.attr('x', function(d) { return d.x; }).attr('y', function(d) { return d.y; });
+            });
+            simulation.on('end', function() { fitToScreen(); });
+        }
+
+        // === Fit / Highlight / Drag ===
+        function fitToScreen() {
+            if (!filteredNodes.length) return;
+            var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            filteredNodes.forEach(function(n) {
+                if (n.x < minX) minX = n.x; if (n.y < minY) minY = n.y;
+                if (n.x > maxX) maxX = n.x; if (n.y > maxY) maxY = n.y;
+            });
+            var padding = 80, dx = maxX - minX + padding * 2, dy = maxY - minY + padding * 2;
+            var scale = Math.min(width / dx, height / dy, 2);
+            var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+            var transform = d3.zoomIdentity.translate(width / 2, height / 2).scale(scale).translate(-cx, -cy);
+            svg.transition().duration(750).call(zoomBehavior.transform, transform);
+        }
+        function highlightNode(node) {
+            var connected = new Set();
+            filteredLinks.forEach(function(link) {
+                var s = link.source.id || link.source, t = link.target.id || link.target;
+                if (s === node.id) connected.add(t);
+                else if (t === node.id) connected.add(s);
+            });
+            nodeElements.classed('faded', function(d) { return d.id !== node.id && !connected.has(d.id); });
+            nodeElements.classed('highlighted', function(d) { return d.id === node.id; });
+            drawLinksHighlighted(node.id, connected);
+        }
+        function clearHighlight() {
+            if (nodeElements) { nodeElements.classed('faded', false).classed('highlighted', false); }
+            drawLinks();
+        }
+        function handleSearch() {
+            var q = document.getElementById('searchInput').value.toLowerCase().trim();
+            if (!q) { clearHighlight(); return; }
+            var matches = new Set();
+            filteredNodes.forEach(function(n) {
+                if (n.content.toLowerCase().indexOf(q) >= 0 || n.category.toLowerCase().indexOf(q) >= 0 || n.id.indexOf(q) >= 0)
+                    matches.add(n.id);
+            });
+            nodeElements.classed('faded', function(d) { return !matches.has(d.id); });
+            nodeElements.classed('highlighted', function(d) { return matches.has(d.id); });
+        }
+        function updateNodeSize(v) {
+            document.getElementById('nodeSizeValue').textContent = v;
+            if (nodeElements) nodeElements.attr('r', v);
+        }
+        function toggleLabels() {
+            var show = document.getElementById('showLabels').checked;
+            if (labelElements) labelElements.style('display', show ? 'block' : 'none');
+        }
+        function toggleLinkWeights() {
+            document.getElementById('weightLegend').style.display =
+                document.getElementById('showLinkWeights').checked ? 'block' : 'none';
+            drawLinks();
+        }
+        function updateTimeline(value) {
+            if (!window.timelineMinId || !window.timelineMaxId) return;
+            var percent = parseInt(value);
+            if (percent >= 100) { applyFilters(); updateTimelineInfo(100); return; }
+            var cutoffId = window.timelineMinId + (window.timelineMaxId - window.timelineMinId) * percent / 100;
+            var catFilter = document.getElementById('categoryFilter').value;
+            var showEntity = document.getElementById('showEntityLinks').checked;
+            var showSemantic = document.getElementById('showSemanticLinks').checked;
+            filteredNodes = allNodes.filter(function(n) {
+                if (catFilter && n.category !== catFilter) return false;
+                return parseInt(n.id) <= cutoffId;
+            });
+            var nodeIds = new Set(filteredNodes.map(function(n) { return n.id; }));
+            filteredLinks = allLinks.filter(function(link) {
+                if (!nodeIds.has(link.source.id || link.source)) return false;
+                if (!nodeIds.has(link.target.id || link.target)) return false;
+                if (link.type === 'entity' && !showEntity) return false;
+                if (link.type === 'semantic' && !showSemantic) return false;
+                return true;
+            });
+            updateTimelineInfo(percent);
+            renderGraph();
+        }
+        var autoplayInterval = null, autoplayDir = 1;
+        function toggleAutoPlay() {
+            var btn = document.getElementById('playPauseBtn');
+            if (autoplayInterval) { clearInterval(autoplayInterval); autoplayInterval = null; btn.textContent = '▶ Play'; }
+            else {
+                btn.textContent = '⏸ Pause';
+                var slider = document.getElementById('timelineSlider');
+                autoplayInterval = setInterval(function() {
+                    var v = parseInt(slider.value) + autoplayDir * 2;
+                    if (v >= 100) { v = 100; autoplayDir = -1; }
+                    else if (v <= 0) { v = 0; autoplayDir = 1; }
+                    slider.value = v; updateTimeline(v);
+                }, 200);
+            }
+        }
+        function centerGraph() { if (simulation) simulation.alpha(1).restart(); }
+        function dragstarted(event, d) { if (!event.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
+        function dragged(event, d) { d.fx = event.x; d.fy = event.y; }
+        function dragended(event, d) { if (!event.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
+
+        // === Toast Notifications ===
+        function showToast(msg) {
+            document.title = '\u26a1 ' + msg;
+            setTimeout(function(){ document.title = 'HippoGraph'; }, 5000);
+            var el = document.getElementById('live-toast');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'live-toast';
+                el.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);padding:10px 24px;background:#0a2a1a;color:#00ff88;border:2px solid #00ff88;border-radius:8px;font-size:15px;font-weight:bold;z-index:2147483647;pointer-events:none;opacity:0;transition:opacity 0.3s;font-family:monospace;box-shadow:0 0 20px rgba(0,255,136,0.4);';
+                document.body.appendChild(el);
+            }
+            el.textContent = msg;
+            el.style.opacity = '1';
+            clearTimeout(el._timer);
+            el._timer = setTimeout(function(){ el.style.opacity = '0'; }, 4000);
+        }
+
+        // === Live Updates (HTTP polling through nginx) ===
+        var socket = null;
+        var wsConnected = false;
+
+        function initLiveUpdates() {
+            var wsToggle = document.createElement('div');
+            wsToggle.style.cssText = 'position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:9999;';
+            wsToggle.innerHTML = '<button id="ws-btn" style="background:rgba(30,30,30,0.95);border:1px solid #555;color:#aaa;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:6px;"><span id="ws-dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#666;"></span><span id="ws-label">Live: Off</span></button>';
+            document.body.appendChild(wsToggle);
+
+            document.getElementById('ws-btn').addEventListener('click', function() {
+                if (wsConnected) {
+                    if (socket) { socket.disconnect(); socket = null; }
+                    if (window._pollInterval) clearInterval(window._pollInterval);
+                    wsConnected = false;
+                    document.getElementById('ws-dot').style.background = '#666';
+                    document.getElementById('ws-label').textContent = 'Live: Off';
+                    document.getElementById('ws-btn').style.borderColor = '#555';
+                    return;
+                }
+
+                var loc = window.location;
+                if (loc.hostname.indexOf('ngrok') >= 0) { showToast('Disabled on public URLs'); return; }
+
+                // Connect socket for session tracking, but use HTTP polling for events
+                var url = loc.protocol + '//' + loc.hostname + ':5001';
+                socket = io(url, { transports: ['polling'], reconnectionAttempts: 5, reconnectionDelay: 2000 });
+
+                socket.on('connect', function() {
+                    wsConnected = true;
+                    document.getElementById('ws-dot').style.background = '#4a9';
+                    document.getElementById('ws-label').textContent = 'Live: On';
+                    document.getElementById('ws-btn').style.borderColor = '#4a9';
+
+                    if (window._pollInterval) clearInterval(window._pollInterval);
+                    window._pollInterval = setInterval(function() {
+                        if (!wsConnected) return;
+                        fetch('/api/poll-events?api_key=' + API_KEY)
+                            .then(function(r) { return r.json(); })
+                            .then(function(data) {
+                                if (!data.events || data.events.length === 0) return;
+                                data.events.forEach(function(item) {
+                                    var d = item.data || {};
+                                    if (item.event === 'note_added') {
+                                        showToast('Note #' + d.id + ' added');
+                                        allNodes.push({ id: String(d.id), category: d.category || 'general', importance: d.importance || 'normal', content: d.preview || '', label: '#' + d.id });
+                                        applyFilters();
+                                    } else if (item.event === 'note_deleted') {
+                                        showToast('Note #' + d.id + ' deleted');
+                                        allNodes = allNodes.filter(function(n) { return n.id !== String(d.id); });
+                                        applyFilters();
+                                    } else if (item.event === 'note_updated') {
+                                        showToast('Note #' + d.id + ' updated');
+                                    } else if (item.event === 'search_performed') {
+                                        showToast('Search: ' + (d.query || ''));
+                                    }
+                                });
+                            })
+                            .catch(function(e) {});
+                    }, 2000);
+                });
+
+                socket.on('disconnect', function() {
+                    if (window._pollInterval) clearInterval(window._pollInterval);
+                    wsConnected = false;
+                    document.getElementById('ws-dot').style.background = '#666';
+                    document.getElementById('ws-label').textContent = 'Live: Off';
+                    document.getElementById('ws-btn').style.borderColor = '#555';
+                });
+
+                socket.on('connect_error', function(err) {
+                    document.getElementById('ws-dot').style.background = '#c44';
+                    document.getElementById('ws-label').textContent = err.message.substring(0,20);
+                    document.getElementById('ws-btn').style.borderColor = '#c44';
+                });
+
+                document.getElementById('ws-dot').style.background = '#fa0';
+                document.getElementById('ws-label').textContent = 'Connecting...';
+            });
+        }
+    </script>
+</body>
+</html>

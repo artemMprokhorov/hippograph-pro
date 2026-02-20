@@ -1,0 +1,93 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/
+
+# Environment & Credentials
+# NEVER commit API keys, ngrok URLs, or sensitive config
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Docker
+docker-compose.override.yml
+
+# Models cache
+models/
+.cache/
+
+# Internal planning (not for public)
+ROADMAP_INTERNAL.md
+TODO.md
+NOTES.md
+SESSION_*.md
+
+# Backup files
+*.bak
+*.bak.*
+*.bak2
+*.bak3
+*.bak4
+*.backup
+*.backup_*
+*_bck_*
+*.old
+*.orig
+
+# Migration scripts (one-off)
+add_emotional_fields.py
+migrate_versioning.py
+update_graph_engine.py
+update_requirements.py
+update_server.py
+ROADMAP_UPDATE.py
+MIGRATION_PLAN_hnswlib.md
+src/ann_index_faiss_backup.py
+scripts/import_export.py
+
+# Deployment plans (internal)
+DEPLOYMENT_PLAN.md
+
+# Leaked key backups
+.env.backup_*
+benchmark/locomo10.json
+benchmark/results/
+data/benchmark/
+tests/regression_results.json
+
+# Temporary/dev files
+src/*.clean_backup
+src/src/
+src/ann_index_old_production.py
+src/graph_cache_keep.py
+src/re_extract_entities.py
+benchmark/session_dia_map.json
+benchmarks/

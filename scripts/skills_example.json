@@ -1,0 +1,17 @@
+[
+  {
+    "name": "code-review-security",
+    "purpose": "Review code for security vulnerabilities, injection risks, authentication flaws",
+    "category": "security-critical",
+    "intensity": 9,
+    "tags": ["security", "code-review"],
+    "when_to_use": "When reviewing code changes or security-sensitive functions"
+  },
+  {
+    "name": "docker-optimization",
+    "purpose": "Optimize Docker images for size, security, and build speed",
+    "category": "development",
+    "intensity": 7,
+    "tags": ["docker", "devops"]
+  }
+]
