@@ -236,6 +236,8 @@
                     <label><input type="checkbox" id="showEntityLinks" checked onchange="applyFilters()"> Show Entity Links</label>
                     <label><input type="checkbox" id="showSemanticLinks" checked onchange="applyFilters()"> Show Semantic Links</label>
                     <label><input type="checkbox" id="showLinkWeights" onchange="toggleLinkWeights()"> Show Link Weights</label>
+                    <label><input type="checkbox" id="pagerankSizing" onchange="applyFilters()"> PageRank Node Sizing</label>
+                    <label><input type="checkbox" id="communityColors" onchange="applyFilters()"> Community Colors</label>
                 </div>
                 <button onclick="fitToScreen()">Fit to Screen</button>
                 <button onclick="centerGraph()">Re-layout</button>
@@ -426,6 +428,27 @@
             'default': '#666'
         };
         function getColor(cat) { return categoryColors[cat] || categoryColors.default; }
+        
+        // Community color palette (10 distinct colors)
+        var communityPalette = ['#4a9eff', '#ff6b35', '#06ffa5', '#9d4edd', '#ffd60a', '#f72585', '#ffbe0b', '#3a86ff', '#fb5607', '#8338ec'];
+        function getCommunityColor(communityId) {
+            if (communityId < 0) return '#333'; // isolated
+            return communityPalette[communityId % communityPalette.length];
+        }
+        function getNodeColor(d) {
+            if (document.getElementById('communityColors').checked && d.community !== undefined) {
+                return getCommunityColor(d.community);
+            }
+            return getColor(d.category);
+        }
+        function getNodeRadius(d) {
+            var base = parseInt(document.getElementById('nodeSize').value) || 8;
+            if (document.getElementById('pagerankSizing').checked && d.pagerank !== undefined) {
+                // Scale: min=base*0.5, max=base*3 based on pagerank (0-1 normalized)
+                return base * (0.5 + d.pagerank * 2.5);
+            }
+            return base;
+        }
         function getWeightColor(w) {
             w = Math.max(0, Math.min(1, w));
             var r = Math.round(0x33 + (0x4a - 0x33) * w);
@@ -503,7 +526,8 @@
                         label: '#' + n.id, importance: n.importance || 'normal',
                         emotional_tone: n.emotional_tone || '',
                         emotional_intensity: n.emotional_intensity || 0,
-                        timestamp: n.timestamp || '', full_length: n.full_length || 0
+                        timestamp: n.timestamp || '', full_length: n.full_length || 0,
+                        pagerank: n.pagerank || 0, community: n.community !== undefined ? n.community : -1
                     });
                 });
                 allNodes = Array.from(nodeMap.values());
@@ -645,8 +669,8 @@
             var nodeSize = parseInt(document.getElementById('nodeSize').value) || 8;
             nodeElements = nodeGroup.selectAll('circle')
                 .data(filteredNodes).enter().append('circle')
-                .attr('class', 'node').attr('r', nodeSize)
-                .attr('fill', function(d) { return getColor(d.category); })
+                .attr('class', 'node').attr('r', function(d) { return getNodeRadius(d); })
+                .attr('fill', function(d) { return getNodeColor(d); })
                 .on('click', function(event, d) { showNodeInfo(d); })
                 .on('mouseover', function(event, d) { highlightNode(d); })
                 .on('mouseout', function() { clearHighlight(); })
@@ -709,7 +733,7 @@
         }
         function updateNodeSize(v) {
             document.getElementById('nodeSizeValue').textContent = v;
-            if (nodeElements) nodeElements.attr('r', v);
+            if (nodeElements) nodeElements.attr('r', function(d) { return getNodeRadius(d); });
         }
         function toggleLabels() {
             var show = document.getElementById('showLabels').checked;

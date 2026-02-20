@@ -161,6 +161,15 @@ def create_app():
                 "type": e.get("edge_type", "semantic")
             })
         
+        # Add PageRank and community data
+        from graph_metrics import get_graph_metrics
+        metrics = get_graph_metrics()
+        if metrics.is_computed:
+            for node in formatted_nodes:
+                nid = node["id"]
+                node["pagerank"] = round(metrics.get_pagerank(nid), 4)
+                node["community"] = metrics.get_community(nid)
+        
         return jsonify({
             "nodes": formatted_nodes,
             "edges": formatted_edges,
