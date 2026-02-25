@@ -9,7 +9,7 @@ import os
 from typing import List, Tuple, Dict
 
 EXTRACTOR_TYPE = os.getenv("ENTITY_EXTRACTOR", "regex")
-# Priority chain: gliner (best balance) → ollama (generation tasks) → spacy → regex
+# Priority chain: gliner (best) → spacy → regex
 
 # Entity filtering configuration
 MIN_ENTITY_LENGTH = 2  # Skip single-character entities
@@ -303,7 +303,7 @@ def extract_entities_spacy(text: str) -> List[Tuple[str, str, float]]:
 def extract_entities(text: str, min_confidence: float = 0.5) -> List[Tuple[str, str]]:
     """
     Extract entities from text using configured backend.
-    Upgrade chain: gliner (best) → ollama → spacy → regex
+    Upgrade chain: gliner (best) → spacy → regex
     """
     if EXTRACTOR_TYPE == "gliner":
         from gliner_client import is_available as gliner_available, extract_entities_gliner
@@ -312,19 +312,6 @@ def extract_entities(text: str, min_confidence: float = 0.5) -> List[Tuple[str, 
             if entities:
                 return entities
         print("⚠️ GLiNER unavailable, falling back to spaCy")
-        entities_with_confidence = extract_entities_spacy(text)
-    elif EXTRACTOR_TYPE == "ollama":
-        # Try Ollama first, fall back to spaCy
-        from ollama_client import is_ollama_available, extract_entities_llm
-        if is_ollama_available():
-            entities = extract_entities_llm(text)
-            if entities:
-                print(f"🤖 Ollama extracted {len(entities)} entities")
-                return entities
-            print("⚠️ Ollama returned empty, falling back to spaCy")
-        else:
-            print("⚠️ Ollama unavailable, falling back to spaCy")
-        # Fallback to spaCy
         entities_with_confidence = extract_entities_spacy(text)
     elif EXTRACTOR_TYPE == "spacy":
         entities_with_confidence = extract_entities_spacy(text)
@@ -348,14 +335,6 @@ def extract_entities_with_confidence(text: str) -> List[Tuple[str, str, float]]:
             entities = extract_entities_gliner_with_confidence(text)
             if entities:
                 return entities
-        return extract_entities_spacy(text)
-    elif EXTRACTOR_TYPE == "ollama":
-        from ollama_client import is_ollama_available, extract_entities_llm
-        if is_ollama_available():
-            entities = extract_entities_llm(text)
-            if entities:
-                return [(name, etype, 0.9) for name, etype in entities]
-        # Fallback
         return extract_entities_spacy(text)
     elif EXTRACTOR_TYPE == "spacy":
         return extract_entities_spacy(text)

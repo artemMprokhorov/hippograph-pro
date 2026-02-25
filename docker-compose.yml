@@ -21,8 +21,8 @@ services:
       - ACTIVATION_DECAY=0.7
       - SIMILARITY_THRESHOLD=0.5
       - HALF_LIFE_DAYS=30
-      # Entity extraction: gliner (recommended) | ollama | spacy | regex
-      - ENTITY_EXTRACTOR=${ENTITY_EXTRACTOR:-spacy}
+      # Entity extraction: gliner (recommended) | spacy | regex
+      - ENTITY_EXTRACTOR=${ENTITY_EXTRACTOR:-gliner}
       - GLINER_MODEL=${GLINER_MODEL:-urchade/gliner_multi-v2.1}
       - GLINER_THRESHOLD=${GLINER_THRESHOLD:-0.4}
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
@@ -32,9 +32,6 @@ services:
       - HNSW_M=32
       - HNSW_EF_CONSTRUCTION=64
       - HNSW_EF_SEARCH=32
-      # Ollama integration (optional)
-      - OLLAMA_URL=${OLLAMA_URL:-http://hippograph-ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen2.5:7b}
       # Fusion method: blend (weighted) or rrf (rank-based)
       - FUSION_METHOD=${FUSION_METHOD:-blend}
     restart: unless-stopped
@@ -43,26 +40,3 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-    depends_on:
-      ollama:
-        condition: service_started
-        required: false
-
-  ollama:
-    image: ollama/ollama:latest
-    container_name: hippograph-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    profiles:
-      - ollama
-
-volumes:
-  ollama_data:
