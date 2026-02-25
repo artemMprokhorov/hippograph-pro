@@ -24,7 +24,7 @@ While the base project provides a stable, zero-dependency memory layer, **Pro** 
 | **Status** | Production-ready | 🚧 Under construction |
 | **Entity extraction** | spaCy + regex | GLiNER zero-shot NER + Ollama LLM + spaCy fallback |
 | **Search** | Semantic + spreading activation | + BM25 hybrid + cross-encoder reranking + RRF fusion |
-| **Benchmarks** | Internal tests | LOCOMO benchmark: 44.2% Recall@5 (zero LLM cost) |
+| **Benchmarks** | Internal tests | LOCOMO benchmark: 66.8% Recall@5 (zero LLM cost) |
 | **Dependencies** | Minimal (Docker only) | + Ollama sidecar (optional), GLiNER model |
 | **Graph analytics** | Basic viewer | + PageRank node sizing, community coloring |
 | **Temporal model** | Created/accessed timestamps | + Bi-temporal (event time extraction) |
@@ -68,8 +68,6 @@ Input text
     ↓
 GLiNER (primary) ─── zero-shot NER, ~250ms, custom entity types
     ↓ fallback
-Ollama LLM ───────── generation tasks, summaries, sleep-time analysis
-    ↓ fallback
 spaCy NER ────────── basic extraction, ~10ms, fixed entity types
     ↓ fallback
 Regex ────────────── dictionary matching only
@@ -94,12 +92,12 @@ Query → Embedding → ANN Search (HNSW)
 ### Infrastructure
 
 ```
-┌─────────────────────┐     ┌──────────────────┐
-│  hippograph          │     │  hippograph-ollama │
-│  (main container)    │────▶│  (optional sidecar)│
-│                      │     │  Qwen2.5:7b       │
-│  Flask API :5001     │     │  Port :11434       │
-│  Graph Viewer :5002  │     └──────────────────┘
+┌─────────────────────┐
+│  hippograph          │
+│  (main container)    │
+│                      │
+│  Flask API :5001     │
+│  Graph Viewer :5002  │
 │  SQLite + FAISS      │
 │  GLiNER + spaCy      │
 │  sentence-transformers│
@@ -124,13 +122,6 @@ docker-compose up -d
 curl http://localhost:5001/health
 ```
 
-**Optional: Enable Ollama for generation tasks**
-
-```bash
-docker compose --profile ollama up -d
-docker exec hippograph-ollama ollama pull qwen2.5:7b
-```
-
 **Graph Viewer:** `http://localhost:5002`
 
 ---
@@ -146,7 +137,6 @@ Features added on top of HippoGraph base:
 | RRF Fusion | ✅ Deployed | Reciprocal Rank Fusion as alternative to weighted blend |
 | Cross-Encoder Reranking | ✅ Deployed | ms-marco-MiniLM precision improvement |
 | PageRank + Communities | ✅ Deployed | Graph analytics in viewer |
-| Ollama Sidecar | ✅ Deployed | LLM for generation tasks (summaries, analysis) |
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
 | LOCOMO Benchmark | ✅ Complete | Standardized evaluation framework |
 | Sleep-Time LLM Compute | 🔄 In Progress | Re-extract entities, discover connections |
@@ -168,6 +158,7 @@ See [competitive_analysis.md](competitive_analysis.md) for detailed comparison w
 
 - [BENCHMARK.md](BENCHMARK.md) — LOCOMO benchmark results and methodology
 - [ROADMAP_PRO.md](ROADMAP_PRO.md) — Development roadmap
+- [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — Third-party dependencies and licenses
 - [competitive_analysis.md](competitive_analysis.md) — Market positioning
 - [docs/](docs/) — Setup guides, API reference, troubleshooting
 
