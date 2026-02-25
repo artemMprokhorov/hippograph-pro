@@ -71,7 +71,18 @@
 - [ ] Synonym/acronym merging (ML → Machine Learning)
 - [ ] Coreference resolution (pronouns → entities)
 
-### 9. Multi-Agent Architecture Groundwork
+### 9. Hierarchical Tree Index for Memory Navigation
+**Inspiration:** PageIndex (VectifyAI, 11.6K stars) — vectorless, reasoning-based RAG via hierarchical tree search.
+**Idea:** Build a tree structure from community detection: Topics → Subtopics → Individual notes.
+Enables top-down navigation ("narrow the theme, then dive deep") as complement to our bottom-up spreading activation.
+- [ ] Research: tree construction from NetworkX communities + subcommunities
+- [ ] Tree search as alternative retrieval path (LLM reasons over tree vs activation spreading)
+- [ ] Hybrid: spreading activation for associative recall, tree search for structured exploration
+- [ ] Evaluate when memory grows to 1000+ notes and activation becomes too broad
+
+**Key insight:** "similarity ≠ relevance" — both PageIndex and HippoGraph address this, but differently. They use LLM reasoning over structure, we use biologically-inspired activation. Combining both could be powerful.
+
+### 10. Multi-Agent Architecture Groundwork
 - [ ] Second AI agent with separate memory space
 - [ ] Hardware entropy source integration (TrueRNG)
 - [ ] Inter-agent memory sharing protocol
