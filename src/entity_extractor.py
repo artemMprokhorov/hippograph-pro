@@ -9,6 +9,7 @@ import os
 from typing import List, Tuple, Dict
 
 EXTRACTOR_TYPE = os.getenv("ENTITY_EXTRACTOR", "regex")
+# Priority chain: gliner (best balance) → ollama (generation tasks) → spacy → regex
 
 # Entity filtering configuration
 MIN_ENTITY_LENGTH = 2  # Skip single-character entities
@@ -302,9 +303,17 @@ def extract_entities_spacy(text: str) -> List[Tuple[str, str, float]]:
 def extract_entities(text: str, min_confidence: float = 0.5) -> List[Tuple[str, str]]:
     """
     Extract entities from text using configured backend.
-    Upgrade chain: ollama (primary) → spacy (fallback) → regex
+    Upgrade chain: gliner (best) → ollama → spacy → regex
     """
-    if EXTRACTOR_TYPE == "ollama":
+    if EXTRACTOR_TYPE == "gliner":
+        from gliner_client import is_available as gliner_available, extract_entities_gliner
+        if gliner_available():
+            entities = extract_entities_gliner(text)
+            if entities:
+                return entities
+        print("⚠️ GLiNER unavailable, falling back to spaCy")
+        entities_with_confidence = extract_entities_spacy(text)
+    elif EXTRACTOR_TYPE == "ollama":
         # Try Ollama first, fall back to spaCy
         from ollama_client import is_ollama_available, extract_entities_llm
         if is_ollama_available():
@@ -333,7 +342,14 @@ def extract_entities_with_confidence(text: str) -> List[Tuple[str, str, float]]:
     """
     Extract entities with confidence scores.
     """
-    if EXTRACTOR_TYPE == "ollama":
+    if EXTRACTOR_TYPE == "gliner":
+        from gliner_client import is_available as gliner_available, extract_entities_gliner_with_confidence
+        if gliner_available():
+            entities = extract_entities_gliner_with_confidence(text)
+            if entities:
+                return entities
+        return extract_entities_spacy(text)
+    elif EXTRACTOR_TYPE == "ollama":
         from ollama_client import is_ollama_available, extract_entities_llm
         if is_ollama_available():
             entities = extract_entities_llm(text)

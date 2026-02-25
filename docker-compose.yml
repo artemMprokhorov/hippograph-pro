@@ -21,8 +21,10 @@ services:
       - ACTIVATION_DECAY=0.7
       - SIMILARITY_THRESHOLD=0.5
       - HALF_LIFE_DAYS=30
-      # Entity extraction: spacy (zero cost) or ollama (LLM quality)
+      # Entity extraction: gliner (recommended) | ollama | spacy | regex
       - ENTITY_EXTRACTOR=${ENTITY_EXTRACTOR:-spacy}
+      - GLINER_MODEL=${GLINER_MODEL:-urchade/gliner_multi-v2.1}
+      - GLINER_THRESHOLD=${GLINER_THRESHOLD:-0.4}
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
       - BLEND_ALPHA=0.7
       - USE_ANN_INDEX=true
