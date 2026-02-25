@@ -1,347 +1,182 @@
 <p align="center">
-  <img src="logo.svg" width="200" alt="Neural Memory Graph Logo">
+  <img src="logo.svg" width="200" alt="HippoGraph Pro Logo">
 </p>
 
 # HippoGraph Pro
 
-**Personal Knowledge Management with Semantic Graph Memory — Pro Edition**
-
-A self-hosted MCP (Model Context Protocol) server that adds persistent, graph-based semantic memory to AI assistants. Pro edition adds RRF fusion, LLM-enhanced processing via Ollama, and advanced graph analytics.
-
-Built on top of [HippoGraph](https://github.com/artemMprokhorov/hippograph) personal edition.
-
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Python](https://img.shields.io/badge/python-3.9+-green.svg)
-![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
+> ⚠️ **Under Active Development** — This is a research fork, not production-ready.
+> Features may break, APIs may change, benchmarks are preliminary.
+> For a stable self-hosted memory system, see [HippoGraph](https://github.com/artemMprokhorov/hippograph).
 
 ---
 
-## ✨ Features
+## What Is This?
 
-**Graph-Based Memory Architecture:**
-- 🕸️ **Automatic Entity Extraction** — Identifies people, concepts, projects from your notes (regex + multilingual spaCy NER)
-- 🔗 **Semantic Connections** — Discovers related notes through shared entities
-- 📊 **Knowledge Graph** — View how your ideas connect and relate
-- 🎯 **Spreading Activation Search** — Find notes through association chains, not just keywords
-- 🔀 **Blend Scoring** — Three-signal retrieval: semantic similarity + graph activation + BM25 keyword matching (tunable α/β/γ weights)
-- 🌍 **Multilingual Support** — English + Russian entity extraction with automatic language detection
+**HippoGraph Pro** is the experimental research branch of [HippoGraph](https://github.com/artemMprokhorov/hippograph) — a self-hosted, graph-based semantic memory system for AI assistants via MCP.
 
-**Graph Visualization & Web UI:**
-- 🔐 **Login Screen** — Branded login with auto-reconnect (7-day credential storage)
-- 🌐 **Interactive Graph Viewer** — D3.js force-directed layout at `http://localhost:5002`
-- 🎨 **Category Color Coding** — Visual distinction by note type
-- ⏱️ **Timeline Animation** — Watch your knowledge graph grow over time
-- 🔍 **Click-to-Detail** — Load full note content on demand
-- 📡 **Live Notifications** — Real-time toast alerts when notes are added/deleted via MCP
+While the base project provides a stable, zero-dependency memory layer, **Pro** is where we push boundaries: better retrieval algorithms, smarter entity extraction, and research into AI memory architectures.
 
-**Technical Features:**
-- 384-dimensional semantic embeddings (paraphrase-multilingual-MiniLM-L12-v2)
-- SQLite graph database with nodes, edges, and entities
-- Automatic relationship detection between notes
-- MCP protocol integration for AI assistants
-- **Multilingual NER** — en_core_web_sm (English) + xx_ent_wiki_sm (Russian/multilingual) with automatic language routing
-- **Temporal decay** for recency-weighted search
-- **Importance scoring** (critical/normal/low) with activation boost
-- **Duplicate detection** with similarity thresholds (blocks >95%, warns >90%)
-- **BM25 keyword search** — Okapi BM25 inverted index for exact term matching, integrated into blend scoring
-- **Cross-encoder reranking** — Optional ms-marco-MiniLM reranker for precision improvement on top-N candidates
-- **Context window protection** — brief/full detail modes, token estimation, progressive loading
-- **Note versioning** — auto-save history, restore previous versions
-- **Graph visualization** — D3.js interactive viewer with REST API
-- **Sleep-time compute** — Zero-LLM graph maintenance: consolidation, PageRank, orphan detection, stale decay, duplicate scan (MCP tool)
-- **Bi-temporal model** — Event time extraction for temporal query answering
-- **LOCOMO benchmark** — 66.8% Recall@5 at zero LLM cost
-- Docker-ready deployment (multi-architecture: amd64 + arm64)
+### How It Differs from HippoGraph (Base)
+
+| | **HippoGraph** (Base) | **HippoGraph Pro** |
+|---|---|---|
+| **Purpose** | Stable personal memory | Research & experimentation |
+| **Status** | Production-ready | 🚧 Under construction |
+| **Entity extraction** | spaCy + regex | GLiNER zero-shot NER + Ollama LLM + spaCy fallback |
+| **Search** | Semantic + spreading activation | + BM25 hybrid + cross-encoder reranking + RRF fusion |
+| **Benchmarks** | Internal tests | LOCOMO benchmark: 44.2% Recall@5 (zero LLM cost) |
+| **Dependencies** | Minimal (Docker only) | + Ollama sidecar (optional), GLiNER model |
+| **Graph analytics** | Basic viewer | + PageRank node sizing, community coloring |
+| **Temporal model** | Created/accessed timestamps | + Bi-temporal (event time extraction) |
+| **Target audience** | Anyone wanting AI memory | Researchers, contributors, the curious |
 
 ---
 
-## 🎯 Use Cases
+## 🔬 Research Focus
 
-- 📚 **Long-term Projects** — Remember architectural decisions, preferences, context across sessions
-- 🔬 **Research Workflows** — Build semantic knowledge base, connect related findings automatically
-- 💼 **Business Context** — Maintain understanding of workflows, track project relationships
-- 🧠 **Personal Knowledge Management** — Second brain with automatic idea connections
-- 🛠️ **Developer Productivity** — Track codebase details, related bugs and solutions
+This project explores several questions:
 
----
+- **Retrieval quality**: Can spreading activation + BM25 + semantic search match LLM-powered systems at zero inference cost?
+- **Entity extraction trade-offs**: GLiNER (250ms, LLM quality) vs Ollama 7B (6s, generation capable) vs spaCy (10ms, basic) — what's the right tool for each job?
+- **Benchmark-driven development**: How does a lightweight graph memory compare to Mem0, Zep/Graphiti, and Letta on standardized benchmarks?
 
-## 🚀 Quick Start
+### Current Benchmark (LOCOMO)
 
-### Prerequisites
+```
+Retrieval-only, zero LLM cost, turn-level granularity (5,870 notes):
 
-- Docker & Docker Compose
-- 4GB+ RAM, 3GB+ disk space
-- For remote access: Reverse proxy (ngrok, Cloudflare Tunnel, or custom)
-
-### 1. Clone & Configure
-
-```bash
-git clone https://github.com/artemMprokhorov/hippograph-pro-pro.git
-cd hippograph
-cp .env.example .env
-# Edit .env and set a strong NEURAL_API_KEY (32+ characters)
+| Category    | Recall@5 | MRR   |
+|-------------|----------|-------|
+| Overall     | 44.2%    | 0.304 |
+| Single-hop  | 37.9%    | 0.227 |
+| Multi-hop   | 52.6%    | 0.394 |
+| Temporal    | 22.9%    | 0.139 |
+| Open-domain | 45.5%    | 0.314 |
 ```
 
-### 2. Start Server
-
-```bash
-docker-compose up -d
-```
-
-The server will:
-- Download embedding models (~2GB on first run)
-- Download spaCy models for entity extraction (en + multilingual)
-- Initialize SQLite database
-- Start API on `http://localhost:5001`
-- Start Graph Viewer on `http://localhost:5002`
-
-### 3. Verify Installation
-
-```bash
-curl http://localhost:5001/health
-# Expected: {"status": "ok", "version": "2.0.0"}
-```
-
-### 4. Open Graph Viewer
-
-Open `http://localhost:5002` in your browser. Enter your API endpoint URL
-(`http://localhost:5001/sse2`) and the API key you set in `.env`.
-
-### 5. Setup Remote Access (Optional)
-
-For Claude.ai integration or remote use, you need a public HTTPS URL.  
-See [Setup Guide](docs/SETUP_GUIDE.md) for options:
-- **ngrok** - Quick testing (free tier)
-- **Cloudflare Tunnel** - Persistent URL (recommended)
-- **Custom reverse proxy** - Nginx, Caddy, etc.
-
-### 6. Connect to Claude.ai
-
-Once you have a public URL:
-1. Go to **Claude.ai → Settings → Integrations**
-2. **Add Remote MCP Server**
-3. Enter: `https://your-domain.com/sse?api_key=YOUR_API_KEY`
-
-See [MCP Integration Guide](docs/MCP_INTEGRATION.md) for details.
-
----
-
-## 📋 System Requirements
-
-### Minimum (for ~500-1000 notes)
-- **RAM:** 2GB minimum (breakdown below)
-  - sentence-transformers model: ~500 MB
-  - spaCy NER models: ~25 MB (en_core_web_sm + xx_ent_wiki_sm)
-  - FAISS index: ~1-2 MB per 1000 nodes
-  - Graph cache: ~1-2 MB per 20K edges
-  - Python runtime + dependencies: ~300 MB
-- **Disk:** 2GB free (Docker image + models)
-- **CPU:** Modern x64/ARM64 processor (no GPU needed)
-- **OS:** Linux, macOS, Windows (with Docker)
-
-### Recommended (for 5000+ notes)
-- **RAM:** 4GB+ (for larger graphs and concurrent requests)
-- **Disk:** 5GB+ (for database growth)
-- **SSD:** Highly recommended for faster SQLite operations
-- **CPU:** 2+ cores for better MCP concurrency
-
-### Performance Notes
-- **ANN Index (FAISS):** Loads all node embeddings into RAM at startup
-  - Scales: ~400 KB per 1000 nodes (384-dim vectors)
-- **Graph Cache:** Loads all edges into RAM for O(1) lookup
-  - Scales: ~1 MB per 20K edges (bidirectional dict)
-- **Cold Start:** ~2-5 seconds to rebuild indices on container restart
-- **Search Speed:** O(log n) with ANN index, fully in-memory graph traversal
-
----
-
-## 🛠️ Available MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `search_memory` | Semantic search with spreading activation. Supports `detail_mode` (brief/full), `max_results` limit, category/time/entity filters |
-| `add_note` | Save note with auto-embedding, entity extraction, and duplicate detection |
-| `update_note` | Modify existing note, recompute connections |
-| `delete_note` | Remove note and its graph relationships |
-| `set_importance` | Set note importance (critical/normal/low) for search ranking |
-| `find_similar` | Check for similar notes before adding (deduplication) |
-| `neural_stats` | View memory statistics and graph metrics |
-| `get_graph` | Get connections for a specific note |
-| `get_note_history` | View version history for a note |
-| `restore_note_version` | Restore note to a previous version |
-
-### REST API (Graph Viewer)
-
-| Endpoint | Description |
-|----------|-------------|
-| `GET /api/graph-data` | All nodes and edges for visualization |
-| `GET /api/node/<id>` | Full content for a single node |
-| `GET /health` | Server health check |
+⚠️ Not directly comparable with Mem0 (J-score) or Letta (accuracy) — different metrics.
+See [BENCHMARK.md](BENCHMARK.md) for full methodology and comparisons.
 
 ---
 
 ## 🏗️ Architecture
 
-### Graph Database Schema
+### Entity Extraction Chain
 
 ```
-nodes (notes)
-├── id, content, category
-├── timestamp, embedding
-├── importance, last_accessed
-└── temporal decay tracking
-
-edges (connections)
-├── source_id → target_id
-├── weight, edge_type
-└── created_at
-
-note_versions (history)
-├── note_id, version_number
-├── content snapshot
-└── last 5 versions kept
-
-entities (extracted concepts)
-├── name, entity_type
-└── linked to multiple nodes
-
-node_entities (relationships)
-└── many-to-many linking
+Input text
+    ↓
+GLiNER (primary) ─── zero-shot NER, ~250ms, custom entity types
+    ↓ fallback
+Ollama LLM ───────── generation tasks, summaries, sleep-time analysis
+    ↓ fallback
+spaCy NER ────────── basic extraction, ~10ms, fixed entity types
+    ↓ fallback
+Regex ────────────── dictionary matching only
 ```
 
-### How It Works
+### Search Pipeline
 
 ```
-┌─────────────┐
-│   Add Note  │
-└──────┬──────┘
-       │
-       ├─→ Generate Embedding (384D vector)
-       ├─→ Extract Entities (spaCy NER + regex)
-       ├─→ Find Related Notes (similarity + shared entities)
-       ├─→ Check Duplicates (>95% blocks, >90% warns)
-       └─→ Create Graph Edges (semantic connections)
+Query → Embedding → ANN Search (HNSW)
+                        ↓
+             Spreading Activation (3 iterations, decay=0.7)
+                        ↓
+             BM25 Keyword Search (Okapi BM25)
+                        ↓
+             Blend: α×semantic + β×spreading + γ×BM25
+                        ↓
+             Cross-Encoder Reranking (optional)
+                        ↓
+             Temporal Decay → Top-K Results
+```
 
-Search Query
-       ↓
-    Embedding → Similarity Search → Spreading Activation → BM25 Keyword
-       ↓              ↓                      ↓                    ↓
-    Vector DB    Related Nodes      Connection Chains     Inverted Index
-                                                                 ↓
-                              Blend Scoring (α×semantic + β×spread + γ×BM25)
-                                           ↓
-                              Cross-Encoder Reranking (optional, top-20)
-                                           ↓
-                                  Temporal Decay + Importance Boost
+### Infrastructure
+
+```
+┌─────────────────────┐     ┌──────────────────┐
+│  hippograph          │     │  hippograph-ollama │
+│  (main container)    │────▶│  (optional sidecar)│
+│                      │     │  Qwen2.5:7b       │
+│  Flask API :5001     │     │  Port :11434       │
+│  Graph Viewer :5002  │     └──────────────────┘
+│  SQLite + FAISS      │
+│  GLiNER + spaCy      │
+│  sentence-transformers│
+└─────────────────────┘
 ```
 
 ---
 
-## 🔧 Configuration
+## 🚀 Quick Start
 
-Edit `.env` to customize behavior:
+> **Prerequisites:** Docker & Docker Compose, 4GB+ RAM
 
 ```bash
-# Entity extraction mode
-ENTITY_EXTRACTOR=spacy  # Options: regex, spacy
+git clone https://github.com/artemMprokhorov/hippograph-pro.git
+cd hippograph-pro
+cp .env.example .env
+# Edit .env: set NEURAL_API_KEY and ENTITY_EXTRACTOR=gliner
 
-# Spreading activation
-ACTIVATION_ITERATIONS=3
-ACTIVATION_DECAY=0.7
+docker-compose up -d
 
-# Blend scoring (four-signal balance)
-# BLEND_ALPHA=0.6  # Semantic similarity weight (default 0.6)
-# BLEND_GAMMA=0.15 # BM25 keyword weight (default 0.0 = disabled)
-# BLEND_DELTA=0.1  # Temporal weight (default 0.0, auto-enabled for temporal queries)
-# β = 1 - α - γ - δ  # Spreading activation gets remainder
-
-# Temporal decay (days)
-HALF_LIFE_DAYS=30
-
-# Deduplication threshold
-SIMILARITY_THRESHOLD=0.5
+# Verify
+curl http://localhost:5001/health
 ```
+
+**Optional: Enable Ollama for generation tasks**
+
+```bash
+docker compose --profile ollama up -d
+docker exec hippograph-ollama ollama pull qwen2.5:7b
+```
+
+**Graph Viewer:** `http://localhost:5002`
 
 ---
 
-## 🔒 Security
+## 📋 Pro-Only Features
 
-**⚠️ Research/Personal Project Notice:**  
-This is not audited for production use with sensitive data.
+Features added on top of HippoGraph base:
 
-**Best Practices:**
-- Use strong API keys (32+ characters, alphanumeric + symbols)
-- Rotate keys periodically
-- Use HTTPS (never expose HTTP publicly)
-- Restrict server access (firewall/VPN)
-- Review [SECURITY.md](SECURITY.md) for details
+| Feature | Status | Description |
+|---------|--------|-------------|
+| GLiNER NER | ✅ Deployed | Zero-shot entity extraction, 35x faster than LLM |
+| BM25 Hybrid Search | ✅ Deployed | Three-signal blend scoring (semantic + graph + keyword) |
+| RRF Fusion | ✅ Deployed | Reciprocal Rank Fusion as alternative to weighted blend |
+| Cross-Encoder Reranking | ✅ Deployed | ms-marco-MiniLM precision improvement |
+| PageRank + Communities | ✅ Deployed | Graph analytics in viewer |
+| Ollama Sidecar | ✅ Deployed | LLM for generation tasks (summaries, analysis) |
+| Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
+| LOCOMO Benchmark | ✅ Complete | Standardized evaluation framework |
+| Sleep-Time LLM Compute | 🔄 In Progress | Re-extract entities, discover connections |
+| Hierarchical Tree Index | 📋 Research | Top-down navigation via community trees |
+| Temporal Reasoning | 📋 Research | LLM-powered temporal query answering |
+| End-to-End QA | 📋 Planned | Answer generation for benchmark comparison |
+
+---
+
+## 📊 Competitive Landscape
+
+See [competitive_analysis.md](competitive_analysis.md) for detailed comparison with Mem0, Zep/Graphiti, Letta, and others.
+
+**Our niche:** Self-hosted, zero-LLM-cost retrieval, graph-based associative memory. The only project combining spreading activation with hybrid BM25 search and zero-shot NER at zero API cost.
 
 ---
 
 ## 📖 Documentation
 
-- [Setup Guide](docs/SETUP_GUIDE.md) — Detailed installation and configuration
-- [API Reference](docs/API_REFERENCE.md) — Complete MCP tools documentation
-- [MCP Integration](docs/MCP_INTEGRATION.md) — Connect to Claude.ai and other clients
-- [Graph Features](docs/GRAPH_FEATURES.md) — Spreading activation and entity linking
-- [Troubleshooting](docs/TROUBLESHOOTING.md) — Common issues and solutions
+- [BENCHMARK.md](BENCHMARK.md) — LOCOMO benchmark results and methodology
+- [ROADMAP_PRO.md](ROADMAP_PRO.md) — Development roadmap
+- [competitive_analysis.md](competitive_analysis.md) — Market positioning
+- [docs/](docs/) — Setup guides, API reference, troubleshooting
 
 ---
 
-## 📦 Project Structure
+## 📄 License
 
-```
-hippograph/
-├── src/
-│   ├── server.py              # Flask app entry
-│   ├── database.py            # Graph database layer
-│   ├── graph_engine.py        # Spreading activation + blend scoring
-│   ├── bm25_index.py          # Okapi BM25 keyword search index
-│   ├── reranker.py            # Cross-encoder reranking pass
-│   ├── sleep_compute.py       # Zero-LLM graph maintenance daemon
-│   ├── entity_extractor.py    # spaCy NER + regex extraction
-│   ├── stable_embeddings.py   # Embedding model
-│   └── mcp_sse_handler.py     # MCP protocol
-├── scripts/
-│   ├── backup.sh              # Database backup
-│   ├── restore.sh             # Database restore
-│   ├── recompute_embeddings.py
-│   └── re_extract_entities.py # Rebuild entity graph with current NER
-├── web/
-│   └── index.html             # D3.js graph viewer
-├── docs/                      # Documentation
-├── docker-compose.yml
-├── Dockerfile
-├── requirements.txt
-└── .env.example
-```
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! This project explores semantic memory systems and knowledge graphs.
-
-**Areas for Contribution:**
-- Additional entity extraction methods (LLM-based)
-- Graph visualization tools
-- Performance optimizations
-- Documentation improvements
-
----
-
-## 📄 Licensing
-
-This project is dual-licensed:
-
-- Open-source / personal / non-commercial use: MIT License  
-  See the <LICENSE> file for full terms.
-- Commercial use, SaaS integration, proprietary redistribution, closed-source derivative works, or any use that does not comply with MIT terms: requires a separate commercial license.  
-  Contact: [system.uid@gmail.com] for pricing, terms, and licensing agreement.
-
-If you plan to use this software in a product, service, internal enterprise deployment, or any context where MIT obligations (copyright notice preservation, etc.) are undesirable or incompatible, obtain explicit written permission via commercial license before proceeding.
-
-This dual-licensing model allows free open-source access while reserving commercial rights to the original author.
+Dual-licensed: MIT for open-source/personal use, commercial license required for business use.
+See [LICENSE](LICENSE) for details. Contact: system.uid@gmail.com
 
 ---
 
@@ -349,6 +184,7 @@ This dual-licensing model allows free open-source access while reserving commerc
 
 **Artem Prokhorov** — Creator and primary author
 
-**Development approach:** This system emerged through intensive human-AI collaboration. Major architectural contributions—including graph-based spreading activation, entity extraction systems, and technical documentation—were developed iteratively with Claude (Anthropic).
+Developed through human-AI collaboration with Claude (Anthropic).
+Major architectural decisions, benchmarking, and research direction by Artem.
 
-Built with 🧠 by Artem Prokhorov
+Built with 🧠 and 🐟 (the [goldfish with antlers](https://github.com/artemMprokhorov/hippograph))

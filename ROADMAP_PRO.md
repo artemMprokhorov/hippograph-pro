@@ -3,7 +3,7 @@
 **Repository:** github.com/artemMprokhorov/hippograph-pro
 **Base:** Built on top of HippoGraph Personal (same container, same memory)
 **Philosophy:** Add capabilities, don't rewrite foundation. LLM as upgrade, not dependency.
-**Last Updated:** February 20, 2026
+**Last Updated:** February 25, 2026
 
 ---
 
@@ -24,31 +24,37 @@
 
 ---
 
-## Phase 2 — Ollama Integration (3-5 days)
+## Phase 2 — Entity Extraction & LLM Integration ✅ MOSTLY COMPLETE
 
-### 3. Ollama Sidecar
-- [ ] Ollama container in docker-compose (optional profile)
-- [ ] Health check and availability detection
-- [ ] Config: `OLLAMA_ENABLED=false` (default OFF)
-- [ ] Graceful degradation: Ollama down → spaCy continues working
+### 3. GLiNER Zero-Shot NER ✅ NEW — PRIMARY EXTRACTOR
+- [x] GLiNER client (src/gliner_client.py) with singleton model loading
+- [x] Zero-shot custom entity types matching HippoGraph taxonomy
+- [x] Confidence scores from model predictions
+- [x] Benchmark: 257ms avg, 3x spaCy, 35x faster than Ollama, LLM-quality results
+- [x] Config: `ENTITY_EXTRACTOR=gliner`, `GLINER_MODEL`, `GLINER_THRESHOLD`
 
-### 4. LLM Entity Extraction
-**Upgrade chain:** Ollama (primary, better quality) → spaCy (fallback, zero cost)
-- [ ] LLM-based extraction: entities + relationships + disambiguation
-- [ ] Automatic fallback to spaCy when Ollama unavailable
-- [ ] Quality comparison: LLM vs spaCy on existing notes
-- [ ] Config: `ENTITY_EXTRACTOR=ollama|spacy` (default: spacy)
+### 4. Ollama Sidecar ✅
+- [x] Ollama container in docker-compose (optional profile)
+- [x] Health check and availability detection
+- [x] Graceful degradation: Ollama down → GLiNER → spaCy continues working
+- [x] Config: `OLLAMA_MODEL=qwen2.5:7b` (user-configurable)
 
-**Trade-off:** +3-7GB Docker image, +4-12GB RAM, 2-5s/note vs 100ms spaCy
+### 5. LLM Entity Extraction ✅ (SUPERSEDED BY GLiNER FOR NER)
+**Original plan:** Ollama as primary NER. **Revised:** GLiNER is better for NER (faster, more stable).
+**Ollama role changed:** Generation tasks only (summaries, sleep-time analysis, temporal reasoning).
+- [x] LLM-based extraction implemented and benchmarked
+- [x] Quality comparison: Ollama 30x slower than spaCy, GLiNER 3x slower with same quality
+- [x] Extraction chain: GLiNER → Ollama → spaCy → regex
+- [x] Config: `ENTITY_EXTRACTOR=gliner|ollama|spacy|regex`
 
-### 5. LLM Sleep-Time Compute
+### 6. LLM Sleep-Time Compute 🔄 IN PROGRESS
 **Current state:** Zero-LLM graph maintenance (consolidation, PageRank, decay, orphans).
 **Upgrade:** Deep memory processing during idle — like brain during actual sleep.
-- [ ] Re-extract entities from old notes using LLM (upgrade spaCy extractions)
+- [ ] Re-extract entities from old notes using GLiNER (upgrade spaCy extractions)
 - [ ] Discover missed connections between notes
-- [ ] Generate cluster summaries for community groups
-- [ ] Identify contradictions or outdated information
-- [ ] Config: `SLEEP_LLM_ENABLED=false` (default OFF, requires Ollama)
+- [ ] Generate cluster summaries for community groups (Ollama)
+- [ ] Identify contradictions or outdated information (Ollama)
+- [ ] Config: `SLEEP_LLM_ENABLED=false` (default OFF)
 
 ---
 
