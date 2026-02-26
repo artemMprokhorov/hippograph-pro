@@ -61,6 +61,14 @@ HippoGraph Pro uses the following open-source components. All are compatible wit
 - **Commercial use:** ✅ Code permitted
 - **⚠️ Note:** Model weights for v2.1 were trained on a Mistral-generated dataset. Mistral's terms allow derivative model training for commercial use. However, if you require strict IP clarity, use spaCy fallback (`ENTITY_EXTRACTOR=spacy` in `.env`).
 
+### GLiNER2 (fastino/gliner2-large-v1)
+- **Code license:** Apache 2.0
+- **Model license:** Apache 2.0
+- **URL:** https://github.com/fastino-ai/GLiNER2
+- **Role:** Sleep-time relation extraction (planned)
+- **Commercial use:** ✅ Permitted — both code and weights are Apache 2.0
+- **Note:** Unified model for NER + relation extraction + text classification. 205M parameters, CPU-efficient.
+
 ### sentence-transformers models (paraphrase-multilingual-MiniLM-L12-v2, ms-marco-MiniLM-L-6-v2)
 - **License:** Apache 2.0
 - **URL:** https://huggingface.co/sentence-transformers
@@ -71,7 +79,9 @@ HippoGraph Pro uses the following open-source components. All are compatible wit
 ## License Compliance Notes
 
 - All code dependencies are permissive (MIT, Apache 2.0, BSD-3, ISC, Public Domain).
-- The only area requiring attention is the GLiNER model weights (training data provenance). For production commercial deployments where strict IP clarity is required, configure `ENTITY_EXTRACTOR=spacy` in `.env`.
+- The only area requiring attention is the GLiNER v2.1 model weights (training data provenance via Mistral-generated dataset). For strict IP clarity, configure `ENTITY_EXTRACTOR=spacy` in `.env`.
+- GLiNER2 (fastino/gliner2-*) is fully Apache 2.0 licensed — both code and weights. No training data concerns.
+- **Important:** GLiNER v1/base models (without version suffix) use CC BY-NC 4.0 — NOT permitted for commercial use. We do NOT use these.
 - HippoGraph Pro itself is dual-licensed: MIT for open-source/personal use, commercial license required for business use. See [LICENSE](LICENSE).
 
 ---
