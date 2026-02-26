@@ -25,6 +25,9 @@ services:
       - ENTITY_EXTRACTOR=${ENTITY_EXTRACTOR:-gliner}
       - GLINER_MODEL=${GLINER_MODEL:-urchade/gliner_multi-v2.1}
       - GLINER_THRESHOLD=${GLINER_THRESHOLD:-0.4}
+      # GLiNER2: relation extraction in sleep_compute (Deep Sleep phase)
+      - GLINER2_MODEL=${GLINER2_MODEL:-fastino/gliner2-large-v1}
+      - GLINER2_THRESHOLD=${GLINER2_THRESHOLD:-0.3}
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
       - BLEND_ALPHA=0.7
       - USE_ANN_INDEX=true
@@ -34,6 +37,11 @@ services:
       - HNSW_EF_SEARCH=32
       # Fusion method: blend (weighted) or rrf (rank-based)
       - FUSION_METHOD=${FUSION_METHOD:-blend}
+      # Sleep-Time Compute auto-trigger
+      # SLEEP_INTERVAL_HOURS: run sleep_compute every N hours (0 = disabled)
+      - SLEEP_INTERVAL_HOURS=${SLEEP_INTERVAL_HOURS:-6}
+      # SLEEP_NOTE_THRESHOLD: also trigger after N new notes added (0 = disabled)
+      - SLEEP_NOTE_THRESHOLD=${SLEEP_NOTE_THRESHOLD:-50}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]

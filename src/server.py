@@ -61,7 +61,11 @@ def create_app():
         get_reranker()._load_model()
     else:
         print("ℹ️  Reranker disabled (set RERANK_ENABLED=true to enable)")
-    
+
+    # Start sleep-time compute scheduler
+    from sleep_scheduler import start_scheduler
+    start_scheduler()
+
     # Register MCP endpoint
     create_mcp_endpoint(app)
     
@@ -84,6 +88,9 @@ def create_app():
         
         from graph_engine import add_note_with_links
         result = add_note_with_links(content, category)
+        # Notify sleep scheduler that a note was added (for threshold trigger)
+        from sleep_scheduler import notify_note_added
+        notify_note_added()
         return jsonify(result)
     
     @app.route("/api/search", methods=["POST"])
@@ -192,6 +199,23 @@ def create_app():
         if not node:
             return jsonify({"error": "not found"}), 404
         return jsonify(dict(node))
+
+    @app.route("/api/sleep/status", methods=["GET"])
+    def sleep_status():
+        """Return sleep scheduler status (no auth required — non-sensitive)."""
+        from sleep_scheduler import get_status
+        return jsonify(get_status())
+
+    @app.route("/api/sleep/trigger", methods=["POST"])
+    def sleep_trigger():
+        """Manually trigger sleep_compute (admin endpoint)."""
+        api_key = request.args.get('api_key', '')
+        expected_key = os.getenv('NEURAL_API_KEY', '')
+        if not expected_key or api_key != expected_key:
+            return jsonify({"error": "unauthorized"}), 401
+        from sleep_scheduler import _run_sleep_compute
+        _run_sleep_compute()
+        return jsonify({"status": "triggered", "message": "sleep_compute started in background"})
 
     return app
 

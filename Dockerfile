@@ -31,6 +31,18 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -m spacy download en_core_web_sm
 RUN python -m spacy download xx_ent_wiki_sm
 
+# Pre-download GLiNER model weights (avoids cold start delay)
+# GLiNER v2.1+ = Apache 2.0. Never use v1/base = CC BY-NC 4.0.
+ARG GLINER_MODEL=urchade/gliner_multi-v2.1
+RUN python -c "from gliner import GLiNER; GLiNER.from_pretrained('${GLINER_MODEL}')" \
+    || echo "⚠️ GLiNER pre-download failed, will download at runtime"
+
+# Pre-download GLiNER2 model weights (Deep Sleep relation extraction)
+# Apache 2.0 license verified.
+ARG GLINER2_MODEL=fastino/gliner2-large-v1
+RUN python -c "from gliner2 import GLiNER2; GLiNER2.from_pretrained('${GLINER2_MODEL}')" \
+    || echo "⚠️ GLiNER2 pre-download failed, will download at runtime"
+
 # Copy source code and startup script
 COPY src/ ./src/
 COPY web/ /var/www/html/

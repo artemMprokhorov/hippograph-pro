@@ -40,8 +40,11 @@ def signal_handler(sig, frame):
     print("\nShutting down gracefully...")
     running = False
 
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
+# Signal handlers only work in main thread — register conditionally
+import threading as _threading
+if _threading.current_thread() is _threading.main_thread():
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
 
 
 def get_db():

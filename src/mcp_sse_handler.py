@@ -336,7 +336,15 @@ def tool_add_note(content: str, category: str, importance: str = "normal", force
     
     result = add_note_with_links(content, category, importance, force,
                                  emotional_tone, emotional_intensity, emotional_reflection)
-    
+
+    # Notify sleep scheduler (threshold-based trigger)
+    if "error" not in result:
+        try:
+            from sleep_scheduler import notify_note_added
+            notify_note_added()
+        except Exception:
+            pass  # scheduler is optional, never block note creation
+
     # Handle duplicate error
     if "error" in result and result["error"] == "duplicate":
         text = f"⚠️ {result['message']}\n"
