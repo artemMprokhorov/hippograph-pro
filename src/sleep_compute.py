@@ -96,6 +96,121 @@ def step_pagerank(db_path, dry_run=False):
     }
 
 
+def step_relation_extraction(db_path, dry_run=False, batch_size=20, limit=200):
+    """Step 2.5: Deep Sleep — extract typed relations via GLiNER2 and build graph edges."""
+    print("\n=== Step 2.5: Relation Extraction (GLiNER2 Deep Sleep) ===")
+
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(__file__))
+        import gliner2_client
+    except ImportError as e:
+        print(f"  ⚠️ gliner2_client import failed: {e}")
+        return {"skipped": True, "reason": "gliner2_client unavailable"}
+
+    if not gliner2_client.is_available():
+        print("  ⚠️ GLiNER2 not available (install: pip install gliner2)")
+        return {"skipped": True, "reason": "gliner2 not installed"}
+
+    conn = sqlite3.connect(db_path)
+
+    # Fetch nodes not yet processed by GLiNER2 relation extraction
+    # Use access_count and last_accessed as proxy — process oldest/least accessed first
+    rows = conn.execute("""
+        SELECT id, content FROM nodes
+        ORDER BY last_accessed ASC NULLS FIRST
+        LIMIT ?
+    """, (limit,)).fetchall()
+
+    if not rows:
+        print("  No nodes to process.")
+        conn.close()
+        return {"processed": 0, "relations_found": 0, "edges_created": 0}
+
+    print(f"  Processing {len(rows)} nodes in batches of {batch_size}...")
+
+    # Batch process
+    texts = [row[1] for row in rows]
+    node_ids = [row[0] for row in rows]
+
+    all_triples = gliner2_client.extract_relations_batch(
+        texts, batch_size=batch_size
+    )
+
+    # Build entity -> node_id index for matching
+    # Use existing entities table to find which nodes contain which entities
+    entity_rows = conn.execute("""
+        SELECT ne.node_id, e.name, e.entity_type
+        FROM node_entities ne
+        JOIN entities e ON ne.entity_id = e.id
+    """).fetchall()
+
+    # entity_name.lower() -> list of node_ids
+    entity_index = {}
+    for node_id, name, etype in entity_rows:
+        key = name.lower()
+        if key not in entity_index:
+            entity_index[key] = []
+        if node_id not in entity_index[key]:
+            entity_index[key].append(node_id)
+
+    # Create edges for found relations
+    edges_created = 0
+    edges_skipped = 0
+    total_relations = 0
+    now = datetime.now().isoformat()
+
+    for i, (node_id, triples) in enumerate(zip(node_ids, all_triples)):
+        total_relations += len(triples)
+        for subject, rel_type, obj in triples:
+            # Find nodes that contain these entities
+            subject_nodes = entity_index.get(subject.lower(), [])
+            object_nodes = entity_index.get(obj.lower(), [])
+
+            # If no entity match, at least link current node to itself (skip)
+            if not subject_nodes and not object_nodes:
+                edges_skipped += 1
+                continue
+
+            # Use current node as source if subject not found elsewhere
+            src_nodes = subject_nodes if subject_nodes else [node_id]
+            tgt_nodes = object_nodes if object_nodes else [node_id]
+
+            for src in src_nodes[:3]:   # cap to avoid explosion
+                for tgt in tgt_nodes[:3]:
+                    if src == tgt:
+                        continue
+                    try:
+                        if not dry_run:
+                            conn.execute("""
+                                INSERT OR IGNORE INTO edges
+                                (source_id, target_id, weight, edge_type, created_at)
+                                VALUES (?, ?, ?, ?, ?)
+                            """, (src, tgt, 0.6, rel_type, now))
+                            edges_created += conn.execute(
+                                "SELECT changes()"
+                            ).fetchone()[0]
+                        else:
+                            edges_created += 1  # dry run count
+                    except Exception as e:
+                        print(f"    Edge insert error: {e}")
+
+    if not dry_run:
+        conn.commit()
+    conn.close()
+
+    print(f"  Nodes processed: {len(rows)}")
+    print(f"  Relations found: {total_relations}")
+    print(f"  Edges created:   {edges_created}")
+    print(f"  Edges skipped (no entity match): {edges_skipped}")
+    return {
+        "processed": len(rows),
+        "relations_found": total_relations,
+        "edges_created": edges_created,
+        "edges_skipped": edges_skipped
+    }
+
+
 def step_orphan_cleanup(db_path, dry_run=False):
     """Step 3: Find entities with very few connections."""
     print("\n=== Step 3: Orphan Entity Detection ===")
@@ -208,6 +323,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in pagerank: {e}")
         results['pagerank'] = {"error": str(e)}
+
+    try:
+        results['relation_extraction'] = step_relation_extraction(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in relation extraction: {e}")
+        results['relation_extraction'] = {"error": str(e)}
 
     try:
         results['orphans'] = step_orphan_cleanup(db_path, dry_run)

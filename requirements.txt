@@ -19,3 +19,10 @@ hnswlib>=0.8.0
 # Graph metrics (PageRank, community detection)
 networkx>=3.0
 scipy>=1.10.0
+
+# GLiNER: zero-shot NER (primary entity extractor, Apache 2.0)
+# NOTE: gliner v1/base = CC BY-NC 4.0, only use v2.1+ (Apache 2.0)
+gliner>=0.2.25
+
+# GLiNER2: unified relation extraction + NER (sleep_compute deep phase, Apache 2.0)
+gliner2>=1.2.0
