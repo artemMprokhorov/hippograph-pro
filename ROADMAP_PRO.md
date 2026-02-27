@@ -3,7 +3,7 @@
 **Repository:** github.com/artemMprokhorov/hippograph-pro
 **Base:** Built on top of HippoGraph Personal (same container, same memory)
 **Philosophy:** Add capabilities, don't rewrite foundation. Zero LLM cost as core advantage.
-**Last Updated:** February 25, 2026
+**Last Updated:** February 27, 2026
 
 ---
 
@@ -57,15 +57,14 @@
 
 ---
 
-## Phase 2.5 — Sleep-Time Compute & Skills 🔄 NEXT
+## Phase 2.5 — Sleep-Time Compute & Skills 🔄 IN PROGRESS
 
 ### 7. GLiNER2 Integration for Relation Extraction
-**Decision:** Use GLiNER (specialist) + GLiNER2 (generalist), not replacement but complementary.
 - GLiNER (urchade/gliner_multi-v2.1): real-time NER during add_note (~250ms/note)
 - GLiNER2 (fastino/gliner2-large-v1): sleep-time relation extraction (205M params)
 - [x] Add GLiNER2 to Docker container (baked in, commit b7983dd)
-- [ ] Extract typed relations: "founded_by", "works_at", "located_in", etc.
 - [x] Create typed edges in graph from extracted relations
+- [ ] Extract typed relations: "founded_by", "works_at", "located_in", etc.
 - [ ] Benchmark GLiNER2 extraction quality on existing notes
 
 ### 8. Sleep-Wake Cycle Architecture
@@ -83,6 +82,10 @@
 - [ ] Cluster consolidation via community detection
 - [ ] Extractive cluster summaries (PageRank top note as label, TF-IDF keywords)
 - [ ] Contradiction detection (cosine similarity + rule-based heuristics)
+- [ ] **Conflict resolution on re-extraction** — what to do when GLiNER2 finds entity
+       that contradicts existing graph node (merge? flag? versioned edge?)
+- [ ] **Rollback mechanism** — snapshot graph state before deep sleep run,
+       restore on failure or quality regression
 
 **REM Sleep** (experimental, Phase 3):
 - [ ] Random walks through graph using TrueRNG hardware entropy
@@ -100,34 +103,47 @@ Sources to ingest:
 - [ ] SkillRL (aiming-lab/SkillRL, ArXiv:2602.08234) — hierarchical skill library
 
 ### 10. Docker Cleanup
-- [ ] Prune old images + build cache (~70GB potential savings)
+- [x] Removed semantic-memory-v2 images (~12GB freed, Feb 27 2026)
+- [ ] Prune remaining old images + build cache (~70GB potential savings)
 
 ---
 
 ## Phase 3 — Research (future)
 
-### 11. LLM Temporal Reasoning
+### 11. End-to-End QA Benchmark ⬆️ PROMOTED — HIGH PRIORITY
+**Problem:** Recall@5 and MRR are retrieval-only metrics. Competitors (Mem0, Letta, Zep)
+report answer accuracy (J-score, F1). Without generation quality our comparison is incomplete.
+**Plan:**
+- [ ] Retrieval → LLM answer generation → F1/ROUGE scoring pipeline
+- [ ] Use existing 1029 QA pairs from generate_qa.py as test set
+- [ ] Compare: HippoGraph retrieval + Claude Haiku generation vs Mem0 J=66.9% vs Letta 74.0%
+- [ ] Note: generation step uses LLM (benchmark only, not production runtime)
+
+### 12. Benchmark Reproducibility — MEDIUM PRIORITY
+**Problem:** No seed, no prepared dataset, no "run it yourself" instructions.
+Numbers floating without verification path.
+**Plan:**
+- [ ] Fix random seed in locomo_adapter.py
+- [ ] Document exact steps to reproduce 66.8% result (Docker + dataset + commands)
+- [ ] Add reproduce section to BENCHMARK.md (partially done, needs seed + dataset link)
+
+### 13. LLM Temporal Reasoning
 **Problem:** Temporal queries at 36.5% on LOCOMO — fundamental ceiling for retrieval-only.
 **Source:** TReMu (ACL 2025) — 29.83% → 77.67% via neuro-symbolic code generation.
 - [ ] Temporal query detection → code generation → execute → filter
 - [ ] Timeline summarization at ingestion
 
-### 12. End-to-End QA Benchmark
-**Problem:** Our metrics are retrieval-only (Recall@5). Competitors report answer accuracy.
-- [ ] Retrieved context → answer generation → F1 scoring
-- [ ] Compare with Mem0 (J=66.9%), Letta (74.0%), Hindsight (89.61%)
-
-### 13. Entity Resolution
+### 14. Entity Resolution
 - [ ] Entity disambiguation (Apple company vs fruit via context)
 - [ ] Synonym/acronym merging (ML → Machine Learning)
 - [ ] Coreference resolution (pronouns → entities)
 
-### 14. Hierarchical Tree Index for Memory Navigation
+### 15. Hierarchical Tree Index for Memory Navigation
 **Inspiration:** PageIndex (VectifyAI, 11.6K stars) — vectorless, reasoning-based RAG.
 - [ ] Tree construction from NetworkX communities + subcommunities
 - [ ] Hybrid: spreading activation + tree search
 
-### 15. Multi-Agent Architecture
+### 16. Multi-Agent Architecture
 - [ ] Second AI agent with separate memory space
 - [ ] Hardware entropy source integration (TrueRNG) for REM sleep
 - [ ] Inter-agent memory sharing protocol
@@ -149,18 +165,26 @@ Sources to ingest:
 | SOC2/GDPR compliance | Personal project |
 | Horizontal scaling | One user |
 | Ollama/LLM sidecar | Removed — GLiNER/GLiNER2 cover all extraction needs |
+| Traction / marketing | Not the goal at this stage |
 
 ---
 
-## Добавлено 26 февраля 2026
+## Добавлено 26–27 февраля 2026
 
-### 16. Anchor Memory — защита якорных воспоминаний от затухания
+### 17. Anchor Memory — защита якорных воспоминаний от затухания
+**Приоритет: HIGH**
 
-**Проблема:** Temporal decay работает одинаково для всех нод. Технические детали правильно устаревают. Но воспоминания про ключевые моменты, историю проекта, отношения — уходят вглубь и становятся недоступны без целенаправленного поиска. Обнаружено: январские воспоминания (первый день, подарок, этические основы) технически в базе но не всплывают в поиске.
+**Проблема:** Temporal decay работает одинаково для всех нод. Технические детали правильно
+устаревают. Но воспоминания про ключевые моменты, историю проекта, отношения — уходят вглубь
+и становятся недоступны без целенаправленного поиска.
 
 **Варианты решения:**
 - [ ] Категория anchor — ноды не подвергаются temporal decay вообще
-- [ ] Decay multiplier по категориям: self-reflection, relational-context, gratitude = 0.1x decay  
+- [ ] Decay multiplier по категориям: self-reflection, relational-context, gratitude = 0.1x decay
 - [ ] sleep_compute поднимает importance якорных нод вместо того чтобы гасить
 
-**Приоритет:** HIGH — это про целостность памяти, не про производительность.
+### 18. Infrastructure — Studio MCP ✅ DONE (Feb 27 2026)
+- [x] nginx-proxy: единый ngrok туннель для hippograph + studio-mcp
+- [x] studio-mcp: прямой доступ к файлам Studio из Claude.ai (6 инструментов)
+- [x] Security hardening: command whitelist, docker/git subcmd restrictions
+- [x] Backup: образы + БД + конфиги сохранены
