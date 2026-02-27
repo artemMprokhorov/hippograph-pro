@@ -21,14 +21,15 @@ DB_PATH = "/app/data/benchmark.db"
 OUT_PATH = "benchmark/results/hippograph_qa.json"
 MODEL = "claude-haiku-4-5-20251001"
 
-SYSTEM_PROMPT = """You generate evaluation questions for a memory retrieval system.
-Given a note, generate 1-2 questions that:
+SYSTEM_PROMPT = """You generate evaluation QA pairs for a memory retrieval system.
+Given a note, generate 1-2 question+answer pairs that:
 1. Can ONLY be answered using information in this specific note
 2. Are specific enough that only this note (not others) would answer them
 3. Sound like natural queries a user would ask
+4. Answer must be a concise factual string extractable from the note (1-2 sentences max)
 
 Return JSON array only, no markdown:
-[{"question": "...", "note_id": <id>, "category": "factual|temporal|entity"}]"""
+[{"question": "...", "answer": "...", "note_id": <id>, "category": "factual|temporal|entity"}]"""
 
 
 def get_notes(db_path, limit=None):
@@ -117,9 +118,8 @@ def main():
             errors += 1
             print(f"  [{i+1}/{len(notes)}] note {note_id}: SKIP")
 
-        # Rate limit: ~5 req/sec for Haiku
-        if i % 10 == 9:
-            time.sleep(0.5)
+        # Rate limit: 50 req/min on free tier → sleep 1.5s per note (~40 req/min)
+        time.sleep(1.5)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
