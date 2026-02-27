@@ -193,3 +193,34 @@ Numbers floating without verification path.
 - [x] studio-mcp: прямой доступ к файлам Studio из Claude.ai (6 инструментов)
 - [x] Security hardening: command whitelist, docker/git subcmd restrictions
 - [x] Backup: образы + БД + конфиги сохранены
+
+
+### 19. User-Defined Anchor Policies — MEDIUM PRIORITY
+**Problem:** Current anchor protection is hardcoded in source (ANCHOR_CATEGORIES, CATEGORY_DECAY_MULTIPLIERS).
+For business use (law firm, medical, finance) users need to define their own permanence rules
+without touching code.
+
+**Concept:** anchor_policies table — user-managed rules that sleep_compute reads before running.
+
+**Policy types:**
+- By category: `category = 'client_contracts'` → decay=0, importance=critical
+- By tag: `tag = 'legal_baseline'` → decay=0
+- By explicit note IDs: `note_id IN (12, 45, 89)` → permanent
+- By query pattern: `content LIKE '%founding document%'` → decay=0
+
+**Implementation:**
+- [ ] `anchor_policies` table in SQLite (id, rule_type, rule_value, decay_override, importance_override, created_at)
+- [ ] MCP tools: `add_anchor_policy`, `list_anchor_policies`, `remove_anchor_policy`
+- [ ] sleep_compute reads policies at startup — merges with hardcoded PROTECTED_CATEGORIES
+- [ ] recency_factor() checks policies before applying decay
+- [ ] step_boost_anchor_importance() respects policy-based importance overrides
+
+**Use case example (law firm):**
+```
+add_anchor_policy(rule_type="category", rule_value="client_contracts", decay_override=0.0)
+add_anchor_policy(rule_type="tag", rule_value="court_deadline", importance_override="critical")
+add_anchor_policy(rule_type="note_id", rule_value="45,89,123", decay_override=0.0)
+```
+
+**Why MEDIUM and not HIGH:** Current hardcoded approach covers personal use well.
+Business use requires this but it's not blocking current research goals.
