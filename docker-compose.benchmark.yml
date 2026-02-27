@@ -16,6 +16,7 @@ services:
     volumes:
       - ./data/benchmark:/app/data  # Separate data directory
       - ./src:/app/src
+      - ./benchmark:/app/benchmark
     environment:
       - DB_PATH=/app/data/benchmark.db
       - FLASK_PORT=5000
@@ -27,6 +28,7 @@ services:
       - HALF_LIFE_DAYS=30
       - ENTITY_EXTRACTOR=spacy
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - BLEND_ALPHA=${BLEND_ALPHA:-0.7}
       - BLEND_GAMMA=${BLEND_GAMMA:-0.15}
       - BLEND_DELTA=${BLEND_DELTA:-0.1}

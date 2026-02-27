@@ -24,7 +24,7 @@ While the base project provides a stable, zero-dependency memory layer, **Pro** 
 | **Status** | Production-ready | 🚧 Under construction |
 | **Entity extraction** | spaCy + regex | GLiNER zero-shot NER + Ollama LLM + spaCy fallback |
 | **Search** | Semantic + spreading activation | + BM25 hybrid + cross-encoder reranking + RRF fusion |
-| **Benchmarks** | Internal tests | LOCOMO benchmark: 66.8% Recall@5 (zero LLM cost) |
+| **Benchmarks** | Internal tests | LOCOMO: 44.2% Recall@5 · E2E QA: 38.7% F1 (zero retrieval cost) |
 | **Dependencies** | Minimal (Docker only) | + Ollama sidecar (optional), GLiNER model |
 | **Graph analytics** | Basic viewer | + PageRank node sizing, community coloring |
 | **Temporal model** | Created/accessed timestamps | + Bi-temporal (event time extraction) |
@@ -40,11 +40,11 @@ This project explores several questions:
 - **Entity extraction trade-offs**: GLiNER (250ms, LLM quality) vs Ollama 7B (6s, generation capable) vs spaCy (10ms, basic) — what's the right tool for each job?
 - **Benchmark-driven development**: How does a lightweight graph memory compare to Mem0, Zep/Graphiti, and Letta on standardized benchmarks?
 
-### Current Benchmark (LOCOMO)
+### Current Benchmarks
+
+**Retrieval — LOCOMO (turn-level, zero LLM cost):**
 
 ```
-Retrieval-only, zero LLM cost, turn-level granularity (5,870 notes):
-
 | Category    | Recall@5 | MRR   |
 |-------------|----------|-------|
 | Overall     | 44.2%    | 0.304 |
@@ -54,8 +54,20 @@ Retrieval-only, zero LLM cost, turn-level granularity (5,870 notes):
 | Open-domain | 45.5%    | 0.314 |
 ```
 
-⚠️ Not directly comparable with Mem0 (J-score) or Letta (accuracy) — different metrics.
-See [BENCHMARK.md](BENCHMARK.md) for full methodology and comparisons.
+**End-to-End QA — HippoGraph internal dataset (1,311 pairs, Claude Haiku generation):**
+
+```
+| Category     | F1    | ROUGE-1 |
+|--------------|-------|---------|
+| Overall      | 38.7% | 66.8%   |
+| Factual      | 40.2% | 67.6%   |
+| Temporal     | 29.2% | 58.5%   |
+| Entity       | 24.9% | 64.5%   |
+```
+
+> GPT-4 without memory: F1=32.1% — HippoGraph +6.6pp with zero retrieval LLM cost.
+> ⚠️ Mem0 (J-score 66.9%) and Letta (74.0%) use different metrics — not directly comparable.
+> See [BENCHMARK.md](BENCHMARK.md) for full methodology.
 
 ---
 
