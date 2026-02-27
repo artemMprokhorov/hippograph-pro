@@ -117,6 +117,23 @@ def step_relation_extraction(db_path, dry_run=False, batch_size=20, limit=200):
 
     conn = sqlite3.connect(db_path)
 
+    # Ensure edge_history table exists for conflict tracking
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS edge_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_id INTEGER NOT NULL,
+            target_id INTEGER NOT NULL,
+            edge_type TEXT,
+            weight REAL,
+            conflict_type TEXT,  -- 'new_relation' | 'type_conflict'
+            existing_edge_type TEXT,
+            created_at TEXT,
+            FOREIGN KEY (source_id) REFERENCES nodes(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_id) REFERENCES nodes(id) ON DELETE CASCADE
+        )
+    """)
+    conn.commit()
+
     # Fetch nodes not yet processed by GLiNER2 relation extraction
     # Use access_count and last_accessed as proxy — process oldest/least accessed first
     rows = conn.execute("""
@@ -185,14 +202,35 @@ def step_relation_extraction(db_path, dry_run=False, batch_size=20, limit=200):
                         continue
                     try:
                         if not dry_run:
-                            conn.execute("""
-                                INSERT OR IGNORE INTO edges
-                                (source_id, target_id, weight, edge_type, created_at)
-                                VALUES (?, ?, ?, ?, ?)
-                            """, (src, tgt, 0.6, rel_type, now))
-                            edges_created += conn.execute(
-                                "SELECT changes()"
-                            ).fetchone()[0]
+                            # Check if edge already exists with different type
+                            existing = conn.execute("""
+                                SELECT id, edge_type FROM edges
+                                WHERE source_id=? AND target_id=?
+                                LIMIT 1
+                            """, (src, tgt)).fetchone()
+
+                            if existing:
+                                existing_type = existing[1]
+                                if existing_type != rel_type:
+                                    # Conflict: different relation type found
+                                    # Principle: never overwrite existing — log to edge_history
+                                    conn.execute("""
+                                        INSERT INTO edge_history
+                                        (source_id, target_id, edge_type, weight,
+                                         conflict_type, existing_edge_type, created_at)
+                                        VALUES (?, ?, ?, ?, 'type_conflict', ?, ?)
+                                    """, (src, tgt, rel_type, 0.6, existing_type, now))
+                                # else: same type, INSERT OR IGNORE handles it silently
+                            else:
+                                # No existing edge — safe to create
+                                conn.execute("""
+                                    INSERT OR IGNORE INTO edges
+                                    (source_id, target_id, weight, edge_type, created_at)
+                                    VALUES (?, ?, ?, ?, ?)
+                                """, (src, tgt, 0.6, rel_type, now))
+                                edges_created += conn.execute(
+                                    "SELECT changes()"
+                                ).fetchone()[0]
                         else:
                             edges_created += 1  # dry run count
                     except Exception as e:
@@ -374,6 +412,53 @@ def step_duplicate_scan(db_path, dry_run=False):
         print(f"    #{a} <-> #{b} similarity={sim:.4f}")
     return {"checked": checked, "duplicates": len(duplicates), "pairs": duplicates[:20]}
 
+SNAPSHOT_DIR = os.getenv("SNAPSHOT_DIR", "/app/data/snapshots")
+MAX_SNAPSHOTS = int(os.getenv("MAX_SNAPSHOTS", "7"))  # Keep last 7 snapshots
+
+
+def create_snapshot(db_path):
+    """Create a timestamped snapshot of the database before sleep compute.
+    
+    Returns snapshot path on success, None on failure.
+    Safety principle: never modify original DB without a snapshot.
+    """
+    import shutil
+    os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    snapshot_path = os.path.join(SNAPSHOT_DIR, f"memory_snapshot_{ts}.db")
+    try:
+        shutil.copy2(db_path, snapshot_path)
+        print(f"  Snapshot created: {snapshot_path}")
+        # Prune old snapshots — keep last MAX_SNAPSHOTS
+        snapshots = sorted([
+            os.path.join(SNAPSHOT_DIR, f) for f in os.listdir(SNAPSHOT_DIR)
+            if f.startswith("memory_snapshot_") and f.endswith(".db")
+        ])
+        while len(snapshots) > MAX_SNAPSHOTS:
+            old_snap = snapshots.pop(0)
+            os.remove(old_snap)
+            print(f"  Pruned old snapshot: {old_snap}")
+        return snapshot_path
+    except Exception as e:
+        print(f"  WARNING: Could not create snapshot: {e}")
+        return None
+
+
+def restore_snapshot(snapshot_path, db_path):
+    """Restore database from snapshot.
+    
+    Only called on explicit error — never as "optimization".
+    """
+    import shutil
+    try:
+        shutil.copy2(snapshot_path, db_path)
+        print(f"  Restored from snapshot: {snapshot_path}")
+        return True
+    except Exception as e:
+        print(f"  ERROR: Could not restore snapshot: {e}")
+        return False
+
+
 def run_all(db_path, dry_run=False):
     """Run all sleep-time compute steps."""
     t0 = time.time()
@@ -384,7 +469,14 @@ def run_all(db_path, dry_run=False):
     print(f"  Mode: {'DRY RUN' if dry_run else 'LIVE'}")
     print(f"{'='*60}")
 
-    results = {}
+    # Safety: create snapshot before any changes
+    snapshot_path = None
+    if not dry_run:
+        snapshot_path = create_snapshot(db_path)
+        if snapshot_path is None:
+            print("  WARNING: Proceeding without snapshot — backup manually if concerned")
+
+    results = {"snapshot": snapshot_path}
     try:
         results['consolidation'] = step_consolidation(db_path, dry_run)
     except Exception as e:
@@ -428,8 +520,28 @@ def run_all(db_path, dry_run=False):
         results['duplicates'] = {"error": str(e)}
 
     elapsed = time.time() - t0
+
+    # Rollback check: if any critical step had an error AND snapshot exists,
+    # offer rollback. We NEVER auto-rollback — human decides.
+    # Principle: errors in individual steps are logged, not auto-reverted.
+    # Only catastrophic DB corruption warrants rollback.
+    critical_errors = [
+        k for k in ('consolidation', 'relation_extraction', 'decay', 'anchor_boost')
+        if isinstance(results.get(k), dict) and 'error' in results[k]
+    ]
+    if critical_errors and snapshot_path:
+        print(f"\n  ⚠️  Errors in steps: {critical_errors}")
+        print(f"  Snapshot available for manual rollback:")
+        restore_cmd = f"from sleep_compute import restore_snapshot; restore_snapshot(\'{snapshot_path}\', \'{db_path}\')"
+        print(f"    python3 -c \"{restore_cmd}\"")
+        results['rollback_available'] = snapshot_path
+    elif snapshot_path:
+        results['rollback_available'] = snapshot_path
+
     print(f"\n{'='*60}")
     print(f"  Completed in {elapsed:.1f}s")
+    if snapshot_path:
+        print(f"  Snapshot: {os.path.basename(snapshot_path)}")
     print(f"{'='*60}\n")
     return results
 
