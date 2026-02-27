@@ -63,9 +63,9 @@
 **Decision:** Use GLiNER (specialist) + GLiNER2 (generalist), not replacement but complementary.
 - GLiNER (urchade/gliner_multi-v2.1): real-time NER during add_note (~250ms/note)
 - GLiNER2 (fastino/gliner2-large-v1): sleep-time relation extraction (205M params)
-- [ ] Add GLiNER2 to Docker container
+- [x] Add GLiNER2 to Docker container (baked in, commit b7983dd)
 - [ ] Extract typed relations: "founded_by", "works_at", "located_in", etc.
-- [ ] Create typed edges in graph from extracted relations
+- [x] Create typed edges in graph from extracted relations
 - [ ] Benchmark GLiNER2 extraction quality on existing notes
 
 ### 8. Sleep-Wake Cycle Architecture
@@ -75,11 +75,11 @@
 - [x] Stale edge decay (existing sleep_compute)
 - [x] Duplicate scan
 - [x] PageRank recalculation
-- [ ] Basic maintenance trigger (automatic, threshold-based)
+- [x] Basic maintenance trigger — sleep_scheduler auto-trigger (commit b7983dd)
 
 **Deep Sleep** (heavy, less frequent — daily):
-- [ ] GLiNER2 re-extraction on old spaCy notes
-- [ ] Relation building via GLiNER2
+- [x] GLiNER2 re-extraction on old spaCy notes
+- [x] Relation building via GLiNER2
 - [ ] Cluster consolidation via community detection
 - [ ] Extractive cluster summaries (PageRank top note as label, TF-IDF keywords)
 - [ ] Contradiction detection (cosine similarity + rule-based heuristics)
