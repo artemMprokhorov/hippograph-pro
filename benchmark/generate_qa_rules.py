@@ -43,35 +43,33 @@ def detect_language(text):
     return "ru" if cyrillic > latin else "en"
 
 
-def make_entity_question(entity_name, entity_type, lang):
-    templates_en = {
-        "person":       [f"What do you know about {entity_name}?",
-                         f"Tell me about {entity_name}."],
-        "organization": [f"What is {entity_name}?",
-                         f"What do you know about {entity_name}?"],
-        "location":     [f"What is mentioned about {entity_name}?"],
-        "tech":         [f"What is {entity_name} used for?",
-                         f"How is {entity_name} described?"],
-        "concept":      [f"What is {entity_name}?",
-                         f"Explain {entity_name}."],
-        "default":      [f"What do you know about {entity_name}?"],
-    }
-    templates_ru = {
-        "person":       [f"Что известно о {entity_name}?",
-                         f"Расскажи о {entity_name}."],
-        "organization": [f"Что такое {entity_name}?",
-                         f"Что известно о {entity_name}?"],
-        "location":     [f"Что упоминается о {entity_name}?"],
-        "tech":         [f"Для чего используется {entity_name}?",
-                         f"Как описывается {entity_name}?"],
-        "concept":      [f"Что такое {entity_name}?",
-                         f"Объясни {entity_name}."],
-        "default":      [f"Что известно о {entity_name}?"],
-    }
-    t = (templates_ru if lang == "ru" else templates_en)
-    options = t.get(entity_type, t["default"])
-    return options[0]
+def find_context_sentence(text, entity_name):
+    sentences = re.split(r"[.!?\n]", text)
+    for s in sentences:
+        s = s.strip()
+        if entity_name.lower() in s.lower() and len(s) > 30 and not s.lower().startswith(entity_name.lower()):
+            return s
+    for s in sentences:
+        s = s.strip()
+        if entity_name.lower() in s.lower() and len(s) > 20:
+            return s
+    return None
 
+
+def make_entity_question(entity_name, entity_type, lang, context_sentence=None):
+    if context_sentence:
+        masked = re.sub(re.escape(entity_name), "[?]", context_sentence, flags=re.IGNORECASE).strip()
+        if "[?]" in masked and len(masked) > 20:
+            if lang == "ru":
+                t = {"person": f"Кто упоминается здесь: {masked}", "tech": f"Какой инструмент: {masked}", "concept": f"О каком понятии: {masked}", "default": f"О чём идёт речь: {masked}"}
+            else:
+                t = {"person": f"Who is mentioned: {masked}", "tech": f"Which tool or system: {masked}", "concept": f"What concept: {masked}", "default": f"What does this refer to: {masked}"}
+            return t.get(entity_type, t["default"])
+    if lang == "ru":
+        fb = {"person": "Кто упоминается в этой заметке?", "tech": "Какой инструмент описывается?", "concept": "Какое понятие объясняется?", "default": "О чём эта заметка?"}
+    else:
+        fb = {"person": "Who is the person mentioned?", "tech": "Which tool or system is described?", "concept": "What concept is explained?", "default": "What is this note about?"}
+    return fb.get(entity_type, fb["default"])
 
 def make_keyword_question(text, lang):
     """Extract a notable keyword/phrase and make a question."""
@@ -155,7 +153,8 @@ def generate_qa(db_path, min_length=30, limit=None):
         ents_sorted = sorted(ents, key=lambda x: -len(x[0]))[:2]
         for name, etype in ents_sorted:
             if len(name) >= 3:
-                q = make_entity_question(name, etype, lang)
+                ctx = find_context_sentence(content, name)
+                q = make_entity_question(name, etype, lang, context_sentence=ctx)
                 questions.append({"question": q, "category": "entity",
                                   "entity": name, "entity_type": etype})
 
