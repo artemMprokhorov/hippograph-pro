@@ -241,33 +241,103 @@ def step_orphan_cleanup(db_path, dry_run=False):
             print(f"    ... and {len(orphans) - 5} more")
     return {"orphans": len(orphans), "details": [(o[0], o[1]) for o in orphans]}
 
+# Categories protected from stale edge decay
+PROTECTED_CATEGORIES = {
+    "anchor", "self-reflection", "relational-context",
+    "gratitude", "milestone", "protocol", "security", "breakthrough"
+}
+
+
 def step_stale_decay(db_path, dry_run=False):
-    """Step 4: Decay weight of edges not accessed recently."""
+    """Step 4: Decay weight of edges not accessed recently.
+    
+    Anchor Memory protection: edges connected to protected category nodes
+    are exempt from decay to preserve identity and relational memory.
+    """
     print("\n=== Step 4: Stale Edge Decay ===")
     cutoff = (datetime.now() - timedelta(days=STALE_EDGE_DAYS)).isoformat()
     conn = sqlite3.connect(db_path)
 
-    # Find old edges with high weight
-    stale = conn.execute("""
+    # Count all stale edges
+    stale_all = conn.execute("""
         SELECT COUNT(*) FROM edges
         WHERE created_at < ? AND weight > 0.3
     """, (cutoff,)).fetchone()[0]
 
-    if dry_run:
-        print(f"  Would decay {stale} edges older than {STALE_EDGE_DAYS} days")
-        conn.close()
-        return {"stale_edges": stale, "decayed": 0}
+    # Count protected edges (connected to anchor/protected nodes)
+    protected = conn.execute("""
+        SELECT COUNT(*) FROM edges e
+        WHERE e.created_at < ? AND e.weight > 0.3
+          AND (
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = e.source_id AND n.category IN ({}))
+            OR
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = e.target_id AND n.category IN ({}))
+          )
+    """.format(
+        ",".join("?" * len(PROTECTED_CATEGORIES)),
+        ",".join("?" * len(PROTECTED_CATEGORIES))
+    ), [cutoff] + list(PROTECTED_CATEGORIES) + list(PROTECTED_CATEGORIES)).fetchone()[0]
 
-    # Decay: multiply weight by 0.95 (gentle aging)
+    stale_decay = stale_all - protected
+    print(f"  Stale edges: {stale_all} total, {protected} protected (anchor), {stale_decay} to decay")
+
+    if dry_run:
+        conn.close()
+        return {"stale_edges": stale_all, "protected": protected, "decayed": 0}
+
+    # Decay only non-protected edges
     conn.execute("""
         UPDATE edges SET weight = weight * 0.95
         WHERE created_at < ? AND weight > 0.3
-    """, (cutoff,))
-    affected = conn.total_changes
+          AND NOT (
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = source_id AND n.category IN ({}))
+            OR
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = target_id AND n.category IN ({}))
+          )
+    """.format(
+        ",".join("?" * len(PROTECTED_CATEGORIES)),
+        ",".join("?" * len(PROTECTED_CATEGORIES))
+    ), [cutoff] + list(PROTECTED_CATEGORIES) + list(PROTECTED_CATEGORIES))
+
     conn.commit()
     conn.close()
-    print(f"  Decayed {stale} edges (weight *= 0.95)")
-    return {"stale_edges": stale, "decayed": stale}
+    print(f"  Decayed {stale_decay} edges (weight *= 0.95), protected {protected} anchor edges")
+    return {"stale_edges": stale_all, "protected": protected, "decayed": stale_decay}
+
+
+def step_boost_anchor_importance(db_path, dry_run=False):
+    """Step 4b: Ensure anchor/protected notes maintain critical importance.
+    
+    Sleep compute should reinforce anchor nodes, not let them fade.
+    If a protected category note has importance != critical, upgrade it.
+    """
+    print("\n=== Step 4b: Anchor Importance Boost ===")
+    conn = sqlite3.connect(db_path)
+
+    # Find protected notes that aren't critical
+    candidates = conn.execute("""
+        SELECT id, category, importance FROM nodes
+        WHERE category IN ({})
+          AND importance != 'critical'
+    """.format(",".join("?" * len(PROTECTED_CATEGORIES))),
+    list(PROTECTED_CATEGORIES)).fetchall()
+
+    print(f"  Found {len(candidates)} anchor notes below critical importance")
+
+    if dry_run or not candidates:
+        conn.close()
+        return {"boosted": 0, "candidates": len(candidates)}
+
+    ids = [row[0] for row in candidates]
+    conn.execute("""
+        UPDATE nodes SET importance = 'critical'
+        WHERE id IN ({})
+    """.format(",".join("?" * len(ids))), ids)
+
+    conn.commit()
+    conn.close()
+    print(f"  Boosted {len(candidates)} anchor notes to critical importance")
+    return {"boosted": len(candidates), "candidates": len(candidates)}
 
 
 def step_duplicate_scan(db_path, dry_run=False):
@@ -344,6 +414,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in stale decay: {e}")
         results['decay'] = {"error": str(e)}
+
+    try:
+        results['anchor_boost'] = step_boost_anchor_importance(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in anchor boost: {e}")
+        results['anchor_boost'] = {"error": str(e)}
 
     try:
         results['duplicates'] = step_duplicate_scan(db_path, dry_run)

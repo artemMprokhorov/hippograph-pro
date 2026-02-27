@@ -37,7 +37,23 @@ def cosine_similarity(a, b):
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
-def recency_factor(last_accessed_str, created_str=None, half_life_days=HALF_LIFE_DAYS):
+# Anchor Memory: categories exempt from temporal decay
+ANCHOR_CATEGORIES = {"anchor"}
+
+# Decay multipliers by category (1.0 = normal decay, 0.0 = no decay)
+CATEGORY_DECAY_MULTIPLIERS = {
+    "anchor": 0.0,           # No decay - permanent memory
+    "self-reflection": 0.1,  # Very slow decay - identity notes
+    "relational-context": 0.1,  # Very slow decay - relationship notes
+    "gratitude": 0.1,        # Very slow decay - emotional anchors
+    "milestone": 0.15,       # Slow decay - key achievements
+    "protocol": 0.2,         # Slow decay - working rules
+    "security": 0.2,         # Slow decay - security decisions
+    "breakthrough": 0.2,     # Slow decay - key insights
+}
+
+
+def recency_factor(last_accessed_str, created_str=None, half_life_days=HALF_LIFE_DAYS, category=None):
     """
     Calculate temporal decay factor based on last access time.
     
@@ -48,7 +64,15 @@ def recency_factor(last_accessed_str, created_str=None, half_life_days=HALF_LIFE
     - 1.0 = accessed today
     - 0.5 = accessed half_life_days ago
     - 0.25 = accessed 2*half_life_days ago
+    
+    Anchor categories are protected from decay:
+    - anchor: always returns 1.0 (no decay)
+    - self-reflection, relational-context, gratitude, milestone: very slow decay
     """
+    # Anchor category: no decay at all
+    if category in ANCHOR_CATEGORIES:
+        return 1.0
+
     # Prefer last_accessed over created timestamp
     timestamp_str = last_accessed_str or created_str
     
@@ -62,8 +86,17 @@ def recency_factor(last_accessed_str, created_str=None, half_life_days=HALF_LIFE
         # Minimum factor to prevent old notes from completely disappearing
         min_factor = 0.1
         decay = 0.5 ** (age_days / half_life_days)
+        base_decay = max(min_factor, decay)
         
-        return max(min_factor, decay)
+        # Apply category-specific decay multiplier
+        multiplier = CATEGORY_DECAY_MULTIPLIERS.get(category, 1.0)
+        if multiplier < 1.0:
+            # Blend: protected categories decay much slower
+            # multiplier=0.1 means only 10% of normal decay applied
+            protected_decay = 1.0 - (1.0 - base_decay) * multiplier
+            return max(min_factor, protected_decay)
+        
+        return base_decay
     except:
         return 0.5
 
@@ -379,9 +412,10 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
             created = node.get("timestamp")
             importance = node.get("importance", "normal")
             access_count = node.get("access_count", 0)
+            category = node.get("category", "general")
             
-            # Apply both factors
-            activations[node_id] *= recency_factor(last_accessed, created)
+            # Apply both factors (category-aware decay for anchor memory)
+            activations[node_id] *= recency_factor(last_accessed, created, category=category)
             activations[node_id] *= importance_factor(importance, access_count)
     
     # Step 4: Blend scoring — combine semantic similarity with spreading activation
