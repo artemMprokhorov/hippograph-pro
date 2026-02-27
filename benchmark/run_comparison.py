@@ -17,29 +17,11 @@ import json, os, sys, time, argparse, urllib.request, urllib.parse, statistics
 from datetime import datetime
 
 SYSTEMS = [
-    {
-        "name": "HippoGraph Pro",
-        "url": "http://localhost:5001",
-        "api_key": "neuralv4_zhmQJuJ0xq_tdR8QwGx-xmOYZe6Lvc3Kplwd6oFIUKbnE5c4moy1nQjZM8B-",
-        "skip_load": True,
-        "color": "🟦"
-    },
-    {
-        "name": "Cosine Only",
-        "url": "http://localhost:5021",
-        "api_key": "benchmark_key_locomo_2026",
-        "skip_load": False,
-        "color": "🟨"
-    },
-    {
-        "name": "BM25 Only",
-        "url": "http://localhost:5020",
-        "api_key": "benchmark_key_locomo_2026",
-        "skip_load": False,
-        "color": "🟥"
-    },
+    {"name": "HippoGraph Pro", "url": "http://172.17.0.1:5001", "api_key": "neuralv4_zhmQJuJ0xq_tdR8QwGx-xmOYZe6Lvc3Kplwd6oFIUKbnE5c4moy1nQjZM8B-", "skip_load": True, "color": "HippoGraph"},
+    {"name": "HippoGraph LOCOMO", "url": "http://172.17.0.1:5004", "api_key": "locomo_key_2026", "skip_load": False, "color": "HippoGraph-LOCOMO"},
+    {"name": "Cosine Only", "url": "http://localhost:5021", "api_key": "benchmark_key_locomo_2026", "skip_load": False, "color": "Cosine"},
+    {"name": "BM25 Only", "url": "http://localhost:5020", "api_key": "benchmark_key_locomo_2026", "skip_load": False, "color": "BM25"},
 ]
-
 RESULTS_DIR = "benchmark/results"
 TOP_K = 5
 
@@ -60,6 +42,18 @@ def http_post(url, payload, timeout=30):
             return json.loads(r.read()), r.status
     except Exception as e:
         return None, str(e)
+
+def http_post_first(url, payload, timeout=30):
+    r, _ = http_post(url, payload, timeout)
+    return r
+
+def note_url(sys_cfg):
+    url, key = sys_cfg["url"], sys_cfg["api_key"]
+    return f"{url}/api/add_note?api_key={key}"
+
+def search_url(sys_cfg):
+    url, key = sys_cfg["url"], sys_cfg["api_key"]
+    return f"{url}/api/search?api_key={key}"
 
 def http_delete(url, timeout=10):
     req = urllib.request.Request(url, method="DELETE")
@@ -84,55 +78,76 @@ def check_systems(systems):
 # ── Load helpers ─────────────────────────────────────────────
 
 def load_notes_into(sys_cfg, notes):
-    """Load list of {content, category, original_id} into a baseline system.
-       Returns mapping original_id -> new_id."""
+    """Load notes into baseline system. Returns mapping original_id -> new_id."""
     url, key = sys_cfg["url"], sys_cfg["api_key"]
-    http_delete(f"{url}/api/reset?api_key={key}")
+    # Reset baseline servers (they have /api/reset)
+    if "5020" in url or "5021" in url:
+        http_delete(f"{url}/api/reset?api_key={key}")
     id_map = {}
     for n in notes:
-        resp, _ = http_post(f"{url}/api/add_note?api_key={key}",
-                            {"content": n["content"], "category": n.get("category","general")})
+        resp, _ = http_post(f"{url}/api/notes?api_key={key}", {"content": n["content"], "category": n.get("category", "general")})
         if resp:
             id_map[n["original_id"]] = resp.get("id")
     return id_map
 
 def load_locomo(sys_cfg, conversations, granularity, chunk_size=3):
-    """Load LOCOMO conversations. Returns dia_id -> note_id map."""
+    """Load LOCOMO conversations into a baseline system.
+    Returns (dia_map, total_notes) where dia_map maps dia_id -> system note id.
+    """
     url, key = sys_cfg["url"], sys_cfg["api_key"]
     http_delete(f"{url}/api/reset?api_key={key}")
     dia_map = {}
     total = 0
     for conv in conversations:
-        cid = conv["id"]
+        cid = conv["sample_id"]
+        conv_dict = conv["conversation"]
+        # collect all turns across sessions
+        all_turns = []
+        for k, v in conv_dict.items():
+            if k.startswith("session_") and not k.endswith("_date_time") and isinstance(v, list):
+                all_turns.extend(v)
         if granularity == "turn":
-            for session in conv["sessions"]:
-                ts = session["timestamp"]
-                for turn in session["turns"]:
-                    text, dia_id = turn.get("text",""), turn.get("dia_id","")
-                    if not text or not dia_id: continue
-                    content = f"[{turn.get('speaker','?')}, {ts}] {text}"
-                    resp, _ = http_post(f"{url}/api/add_note?api_key={key}",
-                                        {"content": content, "category": f"locomo-conv{cid}"})
-                    if resp:
-                        dia_map[dia_id] = resp.get("id", total+1)
-                        total += 1
+            # each turn = one note
+            for turn in all_turns:
+                did = turn["dia_id"]
+                text = f"{turn['speaker']}: {turn['text']}"
+                r = http_post_first(note_url(sys_cfg), {"content": text, "category": "locomo"})
+                if r:
+                    dia_map[f"{cid}:{did}"] = r.get("node_id") or r.get("id")
+                    total += 1
         elif granularity == "session":
-            for session in conv["sessions"]:
-                ts = session["timestamp"]
-                lines = [f"[{conv['speaker_a']} & {conv['speaker_b']}, {ts}]"]
-                dia_ids = []
-                for turn in session["turns"]:
-                    if turn.get("text"): lines.append(f"{turn.get('speaker','?')}: {turn['text']}")
-                    if turn.get("dia_id"): dia_ids.append(turn["dia_id"])
-                resp, _ = http_post(f"{url}/api/add_note?api_key={key}",
-                                    {"content": "\n".join(lines), "category": f"locomo-conv{cid}"})
-                if resp:
-                    nid = resp.get("id", total+1)
-                    for d in dia_ids: dia_map[d] = nid
+            # group by session
+            for k, v in conv_dict.items():
+                if k.startswith("session_") and not k.endswith("_date_time") and isinstance(v, list):
+                    text = " ".join(f"{t['speaker']}: {t['text']}" for t in v)
+                    r = http_post_first(note_url(sys_cfg), {"content": text, "category": "locomo"})
+                    if r:
+                        note_id = r.get("node_id") or r.get("id")
+                        for t in v:
+                            dia_map[f"{cid}:{t[chr(39)]dia_id[chr(39)]}"] = note_id
+                        total += 1
+        elif granularity == "hybrid":
+            # chunks of chunk_size turns
+            chunk, chunk_dids = [], []
+            for turn in all_turns:
+                chunk.append(f"{turn['speaker']}: {turn['text']}")
+                chunk_dids.append(turn["dia_id"])
+                if len(chunk) >= chunk_size:
+                    r = http_post_first(note_url(sys_cfg), {"content": " ".join(chunk), "category": "locomo"})
+                    if r:
+                        nid = r.get("node_id") or r.get("id")
+                        for did in chunk_dids:
+                            dia_map[did] = nid
+                        total += 1
+                    chunk, chunk_dids = [], []
+            if chunk:
+                r = http_post_first(note_url(sys_cfg), {"content": " ".join(chunk), "category": "locomo"})
+                if r:
+                    nid = r.get("node_id") or r.get("id")
+                    for did in chunk_dids:
+                        dia_map[did] = nid
                     total += 1
     return dia_map, total
-
-# ── Evaluate ─────────────────────────────────────────────────
 
 def evaluate(sys_cfg, qa_pairs, id_map, limit=None):
     url, key = sys_cfg["url"], sys_cfg["api_key"]
@@ -150,7 +165,7 @@ def evaluate(sys_cfg, qa_pairs, id_map, limit=None):
         if not evidence_ids: continue
 
         t0 = time.time()
-        resp, _ = http_get(f"{url}/api/search?api_key={key}&q={urllib.parse.quote(q)}&limit={TOP_K}")
+        resp, _ = http_post(f"{url}/api/search?api_key={key}", {"query": q, "limit": TOP_K})
         latencies.append((time.time()-t0)*1000)
         if not resp: continue
 
@@ -225,7 +240,7 @@ def print_table(all_results, title):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--qa", choices=["locomo","hippograph"], default="hippograph")
-    parser.add_argument("--granularity", choices=["turn","session","hybrid","skip"], default="skip",
+    parser.add_argument("--granularity", choices=["turn","session","hybrid","skip"], default="turn",
                         help="skip = use existing data in systems (for hippograph qa)")
     parser.add_argument("--queries", type=int, default=None)
     parser.add_argument("--systems", nargs="+", default=None,
@@ -270,7 +285,7 @@ def main():
             name = sys_cfg["name"]
             print(f"\n{sys_cfg['color']} {name}")
 
-            if not sys_cfg.get("skip_load") and args.granularity != "skip":
+            if not sys_cfg.get("skip_load"):
                 print("  📥 Loading notes...")
                 t0 = time.time()
                 id_map = load_notes_into(sys_cfg, notes)
@@ -300,23 +315,27 @@ def main():
         with open(locomo_path) as f:
             data = json.load(f)
         conversations = data if isinstance(data, list) else data.get("conversations", [])
+        cat_map = {1: "single-hop", 2: "multi-hop", 3: "temporal", 4: "open-domain"}
         qa_pairs = []
         for conv in conversations:
-            for qa in conv.get("qa_pairs", []):
-                qa["conv_id"] = conv["id"]
-                qa_pairs.append(qa)
-        qa_pairs = [q for q in qa_pairs if q.get("category") != "adversarial"]
+            for qa in conv.get("qa", []):
+                if qa.get("category") == 5: continue
+                qa_pairs.append({
+                    "question": qa["question"],
+                    "evidence_note_ids": [e for ev in qa.get("evidence",[]) for e in (ev if isinstance(ev,list) else [ev])],
+                    "category": cat_map.get(qa.get("category", 4), "open-domain")
+                })
         print(f"\n📋 LOCOMO QA pairs: {len(qa_pairs)}")
 
         for sys_cfg in systems:
             name = sys_cfg["name"]
             print(f"\n{sys_cfg['color']} {name}")
 
-            if not sys_cfg.get("skip_load") and args.granularity != "skip":
+            if not sys_cfg.get("skip_load"):
                 print(f"  📥 Loading {args.granularity}-level notes...")
                 t0 = time.time()
                 dia_map, total = load_locomo(sys_cfg, conversations, args.granularity)
-                print(f"  ✅ {total} notes in {time.time()-t0:.1f}s")
+                print(f"  OK {total} notes, dia_map={len(dia_map)}, sample={list(dia_map.items())[:2]}")
             else:
                 dia_map_path = os.path.join(RESULTS_DIR, "session_dia_map.json")
                 if not os.path.exists(dia_map_path):
@@ -330,10 +349,6 @@ def main():
                         for d in v.get("dia_ids", []): dia_map[d] = k
                     else:
                         dia_map[k] = v
-
-            # Reuse evaluate — LOCOMO uses evidence_dia_ids
-            for qa in qa_pairs:
-                qa["evidence_note_ids"] = qa.get("evidence_dia_ids", [])
 
             print(f"  🔍 Evaluating {args.queries or len(qa_pairs)} queries...")
             t0 = time.time()

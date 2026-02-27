@@ -27,7 +27,7 @@ services:
       - HALF_LIFE_DAYS=30
       - ENTITY_EXTRACTOR=spacy
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-      - BLEND_ALPHA=${BLEND_ALPHA:-0.6}
+      - BLEND_ALPHA=${BLEND_ALPHA:-0.7}
       - BLEND_GAMMA=${BLEND_GAMMA:-0.15}
       - BLEND_DELTA=${BLEND_DELTA:-0.1}
       - RERANK_ENABLED=true

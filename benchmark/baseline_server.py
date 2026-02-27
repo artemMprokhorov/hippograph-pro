@@ -171,13 +171,18 @@ def make_app(mode: str) -> Flask:
         elapsed = time.time() - t0
         return jsonify({"id": nid, "elapsed_ms": round(elapsed * 1000, 1)})
 
-    @app.get("/api/search")
+    @app.route("/api/search", methods=["GET", "POST"])
     def api_search():
         err = check_key()
         if err:
             return err
-        query = request.args.get("q", "").strip()
-        top_k = int(request.args.get("limit", 5))
+        if request.method == "POST":
+            data = request.get_json(force=True) or {}
+            query = data.get("query", data.get("q", "")).strip()
+            top_k = int(data.get("limit", 5))
+        else:
+            query = request.args.get("q", "").strip()
+            top_k = int(request.args.get("limit", 5))
         if not query:
             return jsonify({"error": "empty query"}), 400
         t0 = time.time()
