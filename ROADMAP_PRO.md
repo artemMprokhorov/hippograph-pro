@@ -71,7 +71,8 @@
 **Concept:** Biological sleep analog — consolidation, cleanup, dreaming.
 
 **Light Sleep** (fast, frequent — every ~50 new notes):
-- [x] Stale edge decay (existing sleep_compute)
+- [x] Stale edge decay — protected categories exempt (anchor/self-reflection/milestone/etc.)
+- [x] Anchor importance boost — step_boost_anchor_importance, 67 notes upgraded (commit a30167a)
 - [x] Duplicate scan
 - [x] PageRank recalculation
 - [x] Basic maintenance trigger — sleep_scheduler auto-trigger (commit b7983dd)
@@ -171,17 +172,20 @@ Numbers floating without verification path.
 
 ## Добавлено 26–27 февраля 2026
 
-### 17. Anchor Memory — защита якорных воспоминаний от затухания
+### 17. Anchor Memory — защита якорных воспоминаний от затухания ✅ DONE (commit a30167a)
 **Приоритет: HIGH**
 
 **Проблема:** Temporal decay работает одинаково для всех нод. Технические детали правильно
 устаревают. Но воспоминания про ключевые моменты, историю проекта, отношения — уходят вглубь
 и становятся недоступны без целенаправленного поиска.
 
-**Варианты решения:**
-- [ ] Категория anchor — ноды не подвергаются temporal decay вообще
-- [ ] Decay multiplier по категориям: self-reflection, relational-context, gratitude = 0.1x decay
-- [ ] sleep_compute поднимает importance якорных нод вместо того чтобы гасить
+**Реализовано:**
+- [x] ANCHOR_CATEGORIES = {"anchor"} — нода не затухает вообще (recency=1.0)
+- [x] CATEGORY_DECAY_MULTIPLIERS — self-reflection/relational-context/gratitude = 0.1x decay,
+      milestone = 0.15x, protocol/security/breakthrough = 0.2x
+- [x] sleep_compute: PROTECTED_CATEGORIES — edges к защищённым нодам не гасятся
+- [x] step_boost_anchor_importance — новый sleep step, поднимает до critical
+- [x] 67 existing notes upgraded to critical on first deploy
 
 ### 18. Infrastructure — Studio MCP ✅ DONE (Feb 27 2026)
 - [x] nginx-proxy: единый ngrok туннель для hippograph + studio-mcp
