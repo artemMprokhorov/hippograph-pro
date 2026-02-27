@@ -112,7 +112,7 @@ Sources to ingest:
 
 ## Phase 3 — Research (future)
 
-### 11. End-to-End QA Benchmark ⬆️ PROMOTED — HIGH PRIORITY
+### 11. End-to-End QA Benchmark ✅ DONE (commit cc9f058) — F1=38.7% ROUGE=66.8%
 **Problem:** Recall@5 and MRR are retrieval-only metrics. Competitors (Mem0, Letta, Zep)
 report answer accuracy (J-score, F1). Without generation quality our comparison is incomplete.
 **Plan:**
@@ -224,3 +224,4 @@ add_anchor_policy(rule_type="note_id", rule_value="45,89,123", decay_override=0.
 
 **Why MEDIUM and not HIGH:** Current hardcoded approach covers personal use well.
 Business use requires this but it's not blocking current research goals.
+### 11. End-to-End QA Benchmark ✅ DONE (commit cc9f058)
