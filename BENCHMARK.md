@@ -173,3 +173,40 @@ python3 benchmark/locomo_adapter.py --all \
 ---
 
 *HippoGraph is a self-hosted, zero-LLM-cost, graph-based associative memory system. [github.com/artemMprokhorov/hippograph-pro](https://github.com/artemMprokhorov/hippograph-pro)*
+
+---
+
+## Baseline Comparison — 26 February 2026
+
+Baseline servers (Cosine-only and BM25-only, no spreading activation, no reranking) evaluated on full LOCOMO-10 dataset to validate dia_map fix and establish retrieval floor.
+
+**Critical fix applied:** dia_id collision bug — composite keys {sample_id}:{dia_id} now used, ensuring correct note mapping across 10 conversations. Previous runs showed 7% recall due to this bug.
+
+### Results: Turn-Level, 1540 queries, 5882 notes
+
+| Category | Cosine Only R@5 | BM25 Only R@5 |
+|----------|----------------|---------------|
+| Overall | 43.8% | 44.9% |
+| Multi-hop | 51.6% | 53.1% |
+| Temporal | 25.8% | 22.5% |
+| Single-hop | 37.0% | 25.3% |
+| Open-domain | 44.9% | 50.7% |
+| Latency P50 | 121.4ms | 44.3ms |
+| Latency P95 | 129.9ms | 50.4ms |
+
+**Conclusion:** Baseline without spreading activation and reranking achieves ~44% R@5. HippoGraph full pipeline (hybrid granularity + reranking) achieves 66.8% — a +22.6% improvement attributable to spreading activation, cross-encoder reranking, and hybrid chunking.
+
+### Competitive Position (Retrieval vs Answer Accuracy)
+
+| System | Metric | Score | LLM Cost |
+|--------|--------|-------|----------|
+| HippoGraph (full pipeline) | Recall@5 | 66.8% | Zero |
+| HippoGraph (turn-level baseline) | Recall@5 | 44.2% | Zero |
+| Cosine baseline | Recall@5 | 43.8% | Zero |
+| BM25 baseline | Recall@5 | 44.9% | Zero |
+| Mem0 | J-score (answer accuracy) | 66.9% | Requires LLM |
+| Letta/MemGPT | LoCoMo accuracy | 74.0% | Requires LLM |
+| GPT-4 (no memory) | F1 | 32.1% | Requires LLM |
+| Zep/Graphiti | DMR | 94.8% | Requires LLM + Neo4j |
+
+Note: Direct comparison invalid — different metrics. HippoGraph measures retrieval only. Mem0/Letta measure end-to-end answer quality with LLM generation layer.
