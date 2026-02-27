@@ -83,7 +83,8 @@
 - [ ] Cluster consolidation via community detection
 - [ ] Extractive cluster summaries (PageRank top note as label, TF-IDF keywords)
 - [ ] Contradiction detection (cosine similarity + rule-based heuristics)
-- [ ] **Conflict resolution on re-extraction** — what to do when GLiNER2 finds entity
+- [x] **Conflict resolution on re-extraction** — edge_history table, no overwrite on type conflict (commit c51ff90)
+- [x] **Snapshot + rollback** — create_snapshot() before every live run, restore_snapshot() for manual recovery
        that contradicts existing graph node (merge? flag? versioned edge?)
 - [ ] **Rollback mechanism** — snapshot graph state before deep sleep run,
        restore on failure or quality regression
