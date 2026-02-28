@@ -4,13 +4,13 @@
 
 ---
 
-## Important Context: What We’re Measuring and Why
+## Important Context: What We're Measuring and Why
 
-HippoGraph is built for **personal AI agent memory** — associative, emotionally-weighted, decay-based memory optimized for a single user over time. This is architecturally different from systems like Mem0, Zep, or Letta which are designed for multi-session conversation recall across many users.
+HippoGraph is built for **personal AI agent memory** — associative, emotionally-weighted, decay-based memory optimized for a single user over time. This is architecturally different from systems designed for multi-session conversation recall across many users.
 
-Standard benchmarks like LOCOMO test retrieval over random conversations between strangers. This is a valid test of retrieval mechanics, but it doesn’t capture what HippoGraph is actually optimized for: deep associative memory where spreading activation, emotional weighting, and temporal decay interact to surface *personally relevant* context.
+Standard benchmarks like LOCOMO test retrieval over random conversations between strangers. This is a valid test of retrieval mechanics, but it doesn't capture what HippoGraph is actually optimized for: deep associative memory where spreading activation, emotional weighting, and temporal decay interact to surface *personally relevant* context.
 
-We report LOCOMO results for retrieval quality validation. For real-world performance, the meaningful metric is AI-user continuity over time — a personal benchmark we’re developing.
+We report LOCOMO results for retrieval quality validation. For real-world performance, the meaningful metric is AI-user continuity over time — a personal benchmark we're developing.
 
 ---
 
@@ -79,17 +79,19 @@ Baseline servers (no spreading activation, no reranking) on full LOCOMO-10:
 
 ## Competitive Context
 
-⚠️ **Direct numerical comparison is not valid** — different metrics measure different things:
+⚠️ **Direct numerical comparison across systems is not valid** — different metrics, different datasets, different evaluation dates. Numbers below are from each system's own published benchmarks as of February 2026 and may have changed since.
 
-| System | Metric | Score | What It Measures | LLM Cost |
-|--------|--------|-------|-----------------|----------|
-| **HippoGraph** | **Recall@5** | **66.8%** | Retrieved correct doc in top-5 | **Zero** |
-| Mem0 | J-score | 66.9% | LLM-judged answer accuracy | Requires LLM |
-| Letta/MemGPT | LoCoMo accuracy | 74.0% | LLM-generated answer accuracy | Requires LLM |
-| GPT-4 (no memory) | F1 | 32.1% | Answer text overlap | — |
-| Zep/Graphiti | DMR | 94.8% | Different dataset entirely | Requires LLM + Neo4j |
+| System | Metric | Score | Source | Date | What It Measures | LLM Cost |
+|--------|--------|-------|--------|------|-----------------|----------|
+| **HippoGraph** | **Recall@5** | **66.8%** | This repo | Feb 2026 | Retrieved correct doc in top-5 | **Zero** |
+| Mem0 | J-score | 66.9% | [mem0.ai/blog](https://mem0.ai/blog) | Jan 2026 | LLM-judged answer accuracy | Requires LLM |
+| Letta/MemGPT | LoCoMo accuracy | 74.0% | [letta.com/research](https://letta.com) | Jan 2026 | LLM-generated answer accuracy | Requires LLM |
+| GPT-4 (no memory) | F1 | 32.1% | [LOCOMO paper](https://arxiv.org/abs/2402.17599) | 2024 | Answer text overlap | — |
+| Zep/Graphiti | DMR | 94.8% | [getzep.com/blog](https://www.getzep.com) | Jan 2026 | Different dataset entirely | Requires LLM + Neo4j |
 
-HippoGraph measures retrieval only. Mem0/Letta measure end-to-end answer quality with LLM generation. The one valid comparison: **HippoGraph achieves competitive retrieval at zero LLM infrastructure cost**.
+> These numbers are snapshots. Each system actively develops and their benchmarks change. We make no claims about their current performance — check their official documentation for up-to-date numbers.
+
+The one meaningful comparison across all systems: **HippoGraph achieves competitive retrieval at zero LLM infrastructure cost**, while all others require LLM API calls for extraction, consolidation, or answer generation.
 
 ---
 
@@ -114,11 +116,10 @@ HippoGraph evaluated end-to-end on its own notes: retrieval + Claude Haiku gener
 | Temporal | 29.2% | 58.5% | 54 |
 | Entity | 24.9% | 64.5% | 79 |
 
-| System | Metric | Score | Notes |
-|--------|--------|-------|-------|
+| Comparison | Metric | Score | Notes |
+|------------|--------|-------|-------|
 | **HippoGraph E2E** | **F1** | **38.7%** | Zero retrieval cost |
-| GPT-4 (no memory) | F1 | 32.1% | +6.6pp improvement |
-| Mem0 | J-score | 66.9% | Different metric, different data |
+| GPT-4 (no memory) | F1 | 32.1% | [LOCOMO paper](https://arxiv.org/abs/2402.17599), 2024 — +6.6pp improvement |
 
 > F1 scores in the 30-40% range are expected for open-domain QA with exact-match scoring — paraphrased correct answers score low. ROUGE-1 at 66.8% better reflects actual answer quality.
 
