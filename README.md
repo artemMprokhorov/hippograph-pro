@@ -103,6 +103,18 @@ Biological sleep analog — runs in background while idle:
 
 ---
 
+## Memory Philosophy
+
+HippoGraph treats memory the way it should be treated — with care.
+
+**Decay, not deletion.** Edges weaken over time through temporal decay, but are never automatically removed. A weak edge may represent a rare but critical associative link — the kind of connection that surfaces exactly when you need it. The system cannot know what is important to you. Only you know.
+
+**No automatic pruning.** This is an intentional architectural decision. Automatic cleanup optimizes for efficiency at the cost of unpredictable memory loss. If you want to prune weak edges, HippoGraph will show you exactly what would be removed and ask for explicit confirmation — never silently.
+
+**Protected memories don't fade.** Anchor categories (milestones, self-reflection, relational context, security events) are exempt from decay entirely. The memories that define identity and history stay prominent regardless of how long ago they were created.
+
+---
+
 ## 📊 Benchmarks
 
 ### Retrieval — LOCOMO (66.8% Recall@5, zero LLM cost)

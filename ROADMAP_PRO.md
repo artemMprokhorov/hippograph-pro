@@ -155,6 +155,22 @@ Numbers floating without verification path.
 
 ---
 
+
+### 20. Optional Edge Pruning — LOW PRIORITY (user-opt-in only)
+
+**Philosophy:** HippoGraph intentionally does NOT auto-delete weak edges. A low-weight edge may represent a rare but critical associative link between memories. The system cannot know what is important to the user — only the user knows.
+
+This is an architectural decision, not a gap. Automatic pruning risks silent memory loss — the system equivalent of a lobotomy optimizing for "efficiency".
+
+**Implementation (when user explicitly requests it):**
+- [ ] MCP tool: `preview_prunable_edges(threshold)` — show what would be removed, NO deletion
+- [ ] MCP tool: `prune_edges(threshold, confirm=True)` — requires explicit confirmation
+- [ ] Protected categories always exempt (anchor, milestone, self-reflection, etc.)
+- [ ] Full snapshot created before any pruning operation
+- [ ] Pruning log saved for review/rollback
+
+**Never:** automatic pruning on schedule, pruning without preview, pruning protected edges.
+
 ## Out of Scope
 
 | Feature | Reason |
