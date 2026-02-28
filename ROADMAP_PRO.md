@@ -64,8 +64,8 @@
 - GLiNER2 (fastino/gliner2-large-v1): sleep-time relation extraction (205M params)
 - [x] Add GLiNER2 to Docker container (baked in, commit b7983dd)
 - [x] Create typed edges in graph from extracted relations
-- [ ] Extract typed relations: "founded_by", "works_at", "located_in", etc.
-- [ ] Benchmark GLiNER2 extraction quality on existing notes
+- [x] Extract typed relations via spaCy entity rules (step_spacy_relations) — all nodes, every sleep cycle
+- [x] GLiNER2 incremental — only new nodes since last sleep, batch_size=5, no OOM
 
 ### 8. Sleep-Wake Cycle Architecture
 **Concept:** Biological sleep analog — consolidation, cleanup, dreaming.
