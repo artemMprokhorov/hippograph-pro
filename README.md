@@ -43,13 +43,13 @@ Skills ingested not as static files to read, but as experiences with emotional w
 - General-purpose vector search
 - Compliance-heavy enterprise deployments
 
-If you need to search across millions of unrelated documents for thousands of users — use Mem0, Zep, or Pinecone. HippoGraph is built for depth, not scale.
+If you need to search across millions of unrelated documents for thousands of users — this is not the right tool. HippoGraph is built for depth, not scale.
 
 ---
 
 ## How It’s Different
 
-| | **HippoGraph Pro** | **Mem0 / Zep / Letta** |
+| | **HippoGraph Pro** | **Other systems** |
 |---|---|---|
 | **Retrieval** | Spreading activation (associative) | Vector search + LLM traversal |
 | **Emotional context** | First-class — tone, intensity, reflection | Not modeled |
@@ -114,7 +114,7 @@ Biological sleep analog — runs in background while idle:
 | Hybrid + Reranking | 65.5% | 0.535 |
 | **Hybrid + Reranking + Bi-temporal + Query decomposition** | **66.8%** | **0.549** |
 
-> All results at **zero LLM inference cost**. Mem0 (J-score 66.9%) and Letta (74.0%) use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
+> All results at **zero LLM inference cost**. Other systems use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
 
 ### End-to-End QA — Personal data (F1=38.7%)
 
