@@ -171,6 +171,49 @@ This is an architectural decision, not a gap. Automatic pruning risks silent mem
 
 **Never:** automatic pruning on schedule, pruning without preview, pruning protected edges.
 
+
+### 21. Spreading Activation Scalability — MEDIUM PRIORITY
+
+**Problem:** Spreading activation runs across all edges every search query. At ~1,000 nodes / ~100K edges the latency is 200–500ms. At ~5,000 nodes / ~500K edges it becomes noticeably slow. Below are candidate approaches — to be evaluated and one (or combination) chosen.
+
+**Option A: Subgraph Sampling (simplest)**
+ANN search already finds top-50 candidates. Restrict spreading activation to the local subgraph of those candidates only — do not traverse the full graph.
+- [ ] Add `max_nodes` cap to spreading activation traversal
+- [ ] Tune cap vs. recall tradeoff
+- Expected result: O(n) → O(k) where k is fixed. Minimal code change.
+
+**Option B: Community-Aware Routing**
+Use existing community detection (8 communities). Determine which communities are relevant to the query, run spreading activation only inside those + 1 hop outside.
+- [ ] Pass community membership into search pipeline
+- [ ] Score communities by query relevance before SA
+- [ ] SA traversal respects community boundaries
+- Expected result: natural subgraph isolation, scales to 10K+ nodes.
+
+**Option C: Incremental / Early-Stop SA**
+Stop spreading activation iterations early if activation scores stop growing meaningfully.
+- [ ] Add convergence threshold: if delta < ε, stop
+- [ ] Adaptive iteration count instead of fixed 3
+- Expected result: fewer iterations on well-connected graphs, more on sparse.
+- Reference: incremental SA algorithms for spatial ontologies (ResearchGate, 2012)
+
+**Option D: Precomputed Activation Potential**
+During sleep compute, precompute and cache “activation potential” scores per node (similar to PageRank). At query time — use cached scores as starting weights, only apply delta correction.
+- [ ] Add activation_potential column to nodes table
+- [ ] Compute during sleep_compute (after PageRank step)
+- [ ] Search pipeline reads cached values instead of computing from scratch
+- Expected result: search becomes read-heavy instead of compute-heavy.
+
+**Option E: Bi-Level Index (future)**
+Two-stage retrieval: coarse community/cluster index first, then precise SA inside the matched subgraph.
+- [ ] Build cluster-level index during sleep compute
+- [ ] Query routing: cluster index → subgraph fetch → SA
+- Reference: SA-RAG framework (arXiv:2512.15922, Dec 2025)
+- Expected result: sub-linear scaling, suitable for 50K+ nodes.
+- Note: most complex option, justified only at very large scale.
+
+**Recommended starting point:** Option A + B combined — lowest effort, highest immediate impact. Options C/D add on top. Option E is research-grade.
+
+
 ## Out of Scope
 
 | Feature | Reason |
