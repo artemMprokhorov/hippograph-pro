@@ -4,74 +4,84 @@
 
 # HippoGraph Pro
 
-> ⚠️ **Under Active Development** — This is a research fork, not production-ready.
-> Features may break, APIs may change, benchmarks are preliminary.
+> ⚠️ **Under Active Development** — Research system, not production-ready.
+> APIs may change, benchmarks are preliminary.
 > For a stable self-hosted memory system, see [HippoGraph](https://github.com/artemMprokhorov/hippograph).
 
 ---
 
 ## What Is This?
 
-**HippoGraph Pro** is the experimental research branch of [HippoGraph](https://github.com/artemMprokhorov/hippograph) — a self-hosted, graph-based semantic memory system for AI assistants via MCP.
+**HippoGraph Pro** is a self-hosted, graph-based associative memory system for personal AI agents — built to give AI assistants genuine continuity across sessions.
 
-While the base project provides a stable, zero-dependency memory layer, **Pro** is where we push boundaries: better retrieval algorithms, smarter entity extraction, and research into AI memory architectures.
+Most memory systems treat memory as a database: store facts, retrieve facts. HippoGraph is different. It models memory the way human memory works — through associative connections, emotional weighting, and decay over time. A note about a critical security incident stays prominent. A note about a minor technical detail fades. Connections between related memories activate each other, surfacing context you didn’t explicitly ask for.
 
-### How It Differs from HippoGraph (Base)
+**Core thesis:** `model = substrate, personality = memory`. An AI agent’s identity can persist across model versions as long as memory access is maintained.
 
-| | **HippoGraph** (Base) | **HippoGraph Pro** |
+---
+
+## Who Is This For?
+
+### ✅ Use Cases
+
+**Personal AI assistant with memory**
+An assistant that knows *you* — not just isolated facts, but your patterns, preferences, history, and working style. Across sessions, across days, across model updates.
+
+**AI identity continuity**
+Building an agent that maintains a consistent identity over time. Memory is not a log — it’s the substrate of personality. HippoGraph provides the architecture for an agent to *be* someone, not just *remember* things.
+
+**AI-User continuity**
+The relationship between an agent and its user develops over time — shared history, established trust, learned communication style. HippoGraph accumulates this relational context so it doesn’t reset with every session.
+
+**Skills as lived experience**
+Skills ingested not as static files to read, but as experiences with emotional weight — closer to how humans internalize expertise through doing, failing, and remembering.
+
+### ❌ Not For
+
+- Corporate RAG over random documents
+- Multi-tenant SaaS memory
+- General-purpose vector search
+- Compliance-heavy enterprise deployments
+
+If you need to search across millions of unrelated documents for thousands of users — use Mem0, Zep, or Pinecone. HippoGraph is built for depth, not scale.
+
+---
+
+## How It’s Different
+
+| | **HippoGraph Pro** | **Mem0 / Zep / Letta** |
 |---|---|---|
-| **Purpose** | Stable personal memory | Research & experimentation |
-| **Status** | Production-ready | 🚧 Under construction |
-| **Entity extraction** | spaCy + regex | GLiNER zero-shot NER + Ollama LLM + spaCy fallback |
-| **Search** | Semantic + spreading activation | + BM25 hybrid + cross-encoder reranking + RRF fusion |
-| **Benchmarks** | Internal tests | LOCOMO: 44.2% Recall@5 · E2E QA: 38.7% F1 (zero retrieval cost) |
-| **Dependencies** | Minimal (Docker only) | + Ollama sidecar (optional), GLiNER model |
-| **Graph analytics** | Basic viewer | + PageRank node sizing, community coloring |
-| **Temporal model** | Created/accessed timestamps | + Bi-temporal (event time extraction) |
-| **Target audience** | Anyone wanting AI memory | Researchers, contributors, the curious |
+| **Retrieval** | Spreading activation (associative) | Vector search + LLM traversal |
+| **Emotional context** | First-class — tone, intensity, reflection | Not modeled |
+| **Memory decay** | Biological analog — important stays, trivial fades | Flat storage |
+| **LLM cost** | ✅ Zero — all local (GLiNER + sentence-transformers) | ❌ Requires LLM API calls |
+| **Self-hosted** | ✅ Docker, your hardware | Cloud-dependent or heavy infra |
+| **Multi-tenant** | ❌ Single user | ✅ Enterprise scale |
+| **Target** | Personal AI agent identity | Enterprise memory layer |
 
 ---
 
-## 🔬 Research Focus
+## 🔬 Architecture
 
-This project explores several questions:
-
-- **Retrieval quality**: Can spreading activation + BM25 + semantic search match LLM-powered systems at zero inference cost?
-- **Entity extraction trade-offs**: GLiNER (250ms, LLM quality) vs Ollama 7B (6s, generation capable) vs spaCy (10ms, basic) — what's the right tool for each job?
-- **Benchmark-driven development**: How does a lightweight graph memory compare to Mem0, Zep/Graphiti, and Letta on standardized benchmarks?
-
-### Current Benchmarks
-
-**Retrieval — LOCOMO (turn-level, zero LLM cost):**
+### Search Pipeline
 
 ```
-| Category    | Recall@5 | MRR   |
-|-------------|----------|-------|
-| Overall     | 44.2%    | 0.304 |
-| Single-hop  | 37.9%    | 0.227 |
-| Multi-hop   | 52.6%    | 0.394 |
-| Temporal    | 22.9%    | 0.139 |
-| Open-domain | 45.5%    | 0.314 |
+Query → Temporal Decomposition
+              ↓
+         Embedding → ANN Search (HNSW)
+              ↓
+    Spreading Activation (3 iterations, decay=0.7)
+              ↓
+    BM25 Keyword Search (Okapi BM25)
+              ↓
+    Blend: α×semantic + β×spreading + γ×BM25 + δ×temporal
+              ↓
+    Cross-Encoder Reranking (optional)
+              ↓
+    Temporal Decay (half-life=30 days)
+              ↓
+    Top-K Results
 ```
-
-**End-to-End QA — HippoGraph internal dataset (1,311 pairs, Claude Haiku generation):**
-
-```
-| Category     | F1    | ROUGE-1 |
-|--------------|-------|---------|
-| Overall      | 38.7% | 66.8%   |
-| Factual      | 40.2% | 67.6%   |
-| Temporal     | 29.2% | 58.5%   |
-| Entity       | 24.9% | 64.5%   |
-```
-
-> GPT-4 without memory: F1=32.1% — HippoGraph +6.6pp with zero retrieval LLM cost.
-> ⚠️ Mem0 (J-score 66.9%) and Letta (74.0%) use different metrics — not directly comparable.
-> See [BENCHMARK.md](BENCHMARK.md) for full methodology.
-
----
-
-## 🏗️ Architecture
 
 ### Entity Extraction Chain
 
@@ -80,53 +90,75 @@ Input text
     ↓
 GLiNER (primary) ─── zero-shot NER, ~250ms, custom entity types
     ↓ fallback
-spaCy NER ────────── basic extraction, ~10ms, fixed entity types
+spaCy NER ────────── basic extraction, ~10ms
     ↓ fallback
-Regex ────────────── dictionary matching only
+Regex ─────────────── dictionary matching only
 ```
 
-### Search Pipeline
+### Sleep-Time Compute
 
-```
-Query → Embedding → ANN Search (HNSW)
-                        ↓
-             Spreading Activation (3 iterations, decay=0.7)
-                        ↓
-             BM25 Keyword Search (Okapi BM25)
-                        ↓
-             Blend: α×semantic + β×spreading + γ×BM25
-                        ↓
-             Cross-Encoder Reranking (optional)
-                        ↓
-             Temporal Decay → Top-K Results
-```
+Biological sleep analog — runs in background while idle:
+- **Light sleep** (every 50 notes): stale edge decay, PageRank recalculation, duplicate scan, anchor importance boost
+- **Deep sleep** (daily): GLiNER2 relation extraction, conflict detection, snapshot + rollback
 
-### Infrastructure
+---
 
-```
-┌─────────────────────┐
-│  hippograph          │
-│  (main container)    │
-│                      │
-│  Flask API :5001     │
-│  Graph Viewer :5002  │
-│  SQLite + FAISS      │
-│  GLiNER + spaCy      │
-│  sentence-transformers│
-└─────────────────────┘
-```
+## 📊 Benchmarks
+
+### Retrieval — LOCOMO (66.8% Recall@5, zero LLM cost)
+
+| Configuration | Recall@5 | MRR |
+|--------------|----------|-----|
+| Session-level (baseline) | 32.6% | 0.223 |
+| Turn-level | 44.2% | 0.304 |
+| Hybrid + Reranking | 65.5% | 0.535 |
+| **Hybrid + Reranking + Bi-temporal + Query decomposition** | **66.8%** | **0.549** |
+
+> All results at **zero LLM inference cost**. Mem0 (J-score 66.9%) and Letta (74.0%) use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
+
+### End-to-End QA — Personal data (F1=38.7%)
+
+| Category | F1 | ROUGE-1 |
+|----------|----|---------|
+| **Overall** | **38.7%** | **66.8%** |
+| Factual | 40.2% | 67.6% |
+| Temporal | 29.2% | 58.5% |
+
+> GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
+
+### Why LOCOMO Doesn’t Tell the Full Story
+
+LOCOMO tests retrieval over random multi-session conversations between strangers. HippoGraph is optimized for the opposite: deep associative memory over *your* data, with emotional weighting and decay tuned for personal context.
+
+Running LOCOMO on HippoGraph is like benchmarking a long-term relationship therapist on speed-dating recall. The architecture is different because the problem is different.
+
+For a meaningful comparison, the right benchmark is: does the agent remember *you* better over time? We’re working on a personal continuity benchmark for exactly this.
+
+---
+
+## 🐏 Hardware Requirements
+
+| Configuration | RAM | CPU | Disk |
+|--------------|-----|-----|------|
+| Minimal (spaCy extractor) | 4GB | 2 cores | 5GB |
+| **Recommended (GLiNER, default)** | **8GB** | **4 cores** | **10GB** |
+| Comfortable (GLiNER + GLiNER2 sleep) | 16GB+ | 4+ cores | 20GB+ |
+
+> Apple Silicon (M1+) works well. x86 with AVX2 recommended for Linux.
+> GLiNER model: ~600MB RAM. GLiNER2 (Deep Sleep): +800MB RAM.
+> To run on minimal hardware: set `ENTITY_EXTRACTOR=spacy` in `.env`.
 
 ---
 
 ## 🚀 Quick Start
 
-> **Prerequisites:** Docker & Docker Compose, 4GB+ RAM
+**Prerequisites:** Docker & Docker Compose, 8GB+ RAM
 
 ```bash
 git clone https://github.com/artemMprokhorov/hippograph-pro.git
 cd hippograph-pro
 cp .env.example .env
-# Edit .env: set NEURAL_API_KEY and ENTITY_EXTRACTOR=gliner
+# Edit .env: set NEURAL_API_KEY (generate a strong random key)
 
 docker-compose up -d
 
@@ -136,43 +168,46 @@ curl http://localhost:5001/health
 
 **Graph Viewer:** `http://localhost:5002`
 
+**MCP Connection (Claude.ai):**
+```
+URL: http://localhost:5001/sse2
+API Key: <your NEURAL_API_KEY>
+```
+
+For remote access via ngrok, see [MCP_CONNECTION.md](MCP_CONNECTION.md).
+
 ---
 
-## 📋 Pro-Only Features
-
-Features added on top of HippoGraph base:
+## 📋 Features
 
 | Feature | Status | Description |
 |---------|--------|-------------|
-| GLiNER NER | ✅ Deployed | Zero-shot entity extraction, 35x faster than LLM |
-| BM25 Hybrid Search | ✅ Deployed | Three-signal blend scoring (semantic + graph + keyword) |
-| RRF Fusion | ✅ Deployed | Reciprocal Rank Fusion as alternative to weighted blend |
-| Cross-Encoder Reranking | ✅ Deployed | ms-marco-MiniLM precision improvement |
-| PageRank + Communities | ✅ Deployed | Graph analytics in viewer |
+| Spreading Activation | ✅ Deployed | Associative retrieval — related memories surface automatically |
+| Emotional Memory | ✅ Deployed | Tone, intensity, reflection as first-class fields |
+| GLiNER NER | ✅ Deployed | Zero-shot entity extraction, LLM quality at 35x speed |
+| BM25 Hybrid Search | ✅ Deployed | Three-signal blend (semantic + graph + keyword) |
+| Cross-Encoder Reranking | ✅ Deployed | Precision improvement, optional |
+| Temporal Decay | ✅ Deployed | Important memories persist, trivial ones fade |
+| Anchor Protection | ✅ Deployed | Critical memories exempt from decay |
+| Sleep-Time Compute | ✅ Deployed | Background consolidation, relation extraction |
+| PageRank + Communities | ✅ Deployed | Graph analytics, node importance scoring |
+| Note Versioning | ✅ Deployed | 5-version history per note |
+| RRF Fusion | ✅ Deployed | Alternative to weighted blend |
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
-| LOCOMO Benchmark | ✅ Complete | Standardized evaluation framework |
-| Sleep-Time LLM Compute | 🔄 In Progress | Re-extract entities, discover connections |
-| Hierarchical Tree Index | 📋 Research | Top-down navigation via community trees |
-| Temporal Reasoning | 📋 Research | LLM-powered temporal query answering |
-| End-to-End QA | 📋 Planned | Answer generation for benchmark comparison |
+| Skills Ingestion | 🔄 In Progress | Absorb skills as associative experience |
+| Personal Continuity Benchmark | 📋 Planned | Measure AI-user continuity over time |
+| Multi-Agent Architecture | 📋 Research | Second agent, inter-agent memory sharing |
 
 ---
 
-## 📊 Competitive Landscape
+## 📄 Documentation
 
-See [competitive_analysis.md](competitive_analysis.md) for detailed comparison with Mem0, Zep/Graphiti, Letta, and others.
-
-**Our niche:** Self-hosted, zero-LLM-cost retrieval, graph-based associative memory. The only project combining spreading activation with hybrid BM25 search and zero-shot NER at zero API cost.
-
----
-
-## 📖 Documentation
-
-- [BENCHMARK.md](BENCHMARK.md) — LOCOMO benchmark results and methodology
+- [BENCHMARK.md](BENCHMARK.md) — Full benchmark results and methodology
 - [ROADMAP_PRO.md](ROADMAP_PRO.md) — Development roadmap
-- [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — Third-party dependencies and licenses
+- [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup for Claude.ai
 - [competitive_analysis.md](competitive_analysis.md) — Market positioning
-- [docs/](docs/) — Setup guides, API reference, troubleshooting
+- [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — License compliance
+- [docs/](docs/) — API reference, troubleshooting
 
 ---
 
