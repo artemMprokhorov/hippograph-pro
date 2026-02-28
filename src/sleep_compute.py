@@ -99,7 +99,7 @@ def step_pagerank(db_path, dry_run=False):
     }
 
 
-def step_relation_extraction(db_path, dry_run=False, batch_size=20, limit=200):
+def step_relation_extraction(db_path, dry_run=False, batch_size=5, limit=20):
     """Step 2.5: Deep Sleep — extract typed relations via GLiNER2 and build graph edges."""
     print("\n=== Step 2.5: Relation Extraction (GLiNER2 Deep Sleep) ===")
 
@@ -136,11 +136,20 @@ def step_relation_extraction(db_path, dry_run=False, batch_size=20, limit=200):
 
     # Fetch nodes not yet processed by GLiNER2 relation extraction
     # Use access_count and last_accessed as proxy — process oldest/least accessed first
+    # Incremental: only nodes added since last sleep run
+    conn.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)")
+    conn.commit()
+    last_sleep = conn.execute(
+        "SELECT value FROM metadata WHERE key='last_sleep_at' LIMIT 1"
+    ).fetchone()
+    last_sleep_ts = last_sleep[0] if last_sleep else "1970-01-01"
+
     rows = conn.execute("""
         SELECT id, content FROM nodes
-        ORDER BY last_accessed ASC NULLS FIRST
+        WHERE timestamp > ?
+        ORDER BY timestamp ASC
         LIMIT ?
-    """, (limit,)).fetchall()
+    """, (last_sleep_ts, limit)).fetchall()
 
     if not rows:
         print("  No nodes to process.")
@@ -251,6 +260,135 @@ def step_relation_extraction(db_path, dry_run=False, batch_size=20, limit=200):
         "edges_skipped": edges_skipped
     }
 
+
+def step_spacy_relations(db_path, dry_run=False):
+    """Step 2.6: Build typed edges from existing spaCy entity data.
+
+    Covers ALL nodes using already-extracted entity types.
+    No LLM, no model loading — pure SQL + entity type rules.
+    Runs every sleep cycle as comprehensive pass.
+
+    Relation rules:
+      person + organization  -> works_for
+      person + location      -> located_in
+      person + concept       -> knows_about
+      person + tech          -> uses
+      tech + tech            -> depends_on
+      tech + concept         -> implements
+      concept + concept      -> related_to
+      organization + location -> located_in
+    """
+    print("\n=== Step 2.6: spaCy Entity Relations ===")
+
+    RELATION_RULES = {
+        ('person', 'organization'): 'works_for',
+        ('organization', 'person'): 'works_for',
+        ('person', 'location'): 'located_in',
+        ('location', 'person'): 'located_in',
+        ('person', 'concept'): 'knows_about',
+        ('concept', 'person'): 'knows_about',
+        ('person', 'tech'): 'uses',
+        ('tech', 'person'): 'uses',
+        ('tech', 'tech'): 'depends_on',
+        ('tech', 'concept'): 'implements',
+        ('concept', 'tech'): 'implements',
+        ('concept', 'concept'): 'related_to',
+        ('organization', 'location'): 'located_in',
+        ('location', 'organization'): 'located_in',
+        ('organization', 'tech'): 'uses',
+        ('tech', 'organization'): 'uses',
+    }
+
+    conn = sqlite3.connect(db_path)
+
+    # For each node: get all entity types present
+    node_entity_types = {}
+    rows = conn.execute("""
+        SELECT ne.node_id, e.entity_type
+        FROM node_entities ne
+        JOIN entities e ON ne.entity_id = e.id
+        WHERE e.entity_type IS NOT NULL
+    """).fetchall()
+
+    for node_id, etype in rows:
+        if node_id not in node_entity_types:
+            node_entity_types[node_id] = set()
+        node_entity_types[node_id].add(etype)
+
+    print(f"  Nodes with entities: {len(node_entity_types)}")
+
+    # For each pair of entity types within same node -> create edge via
+    # shared entity to other nodes that have that entity
+    # Simpler: for each node with 2+ entity types, find other nodes sharing
+    # at least one entity, then apply type rules between the node pairs.
+
+    # Build entity_id -> list of (node_id, entity_type)
+    entity_nodes = {}
+    entity_type_map = {}
+    full_rows = conn.execute("""
+        SELECT ne.node_id, ne.entity_id, e.entity_type
+        FROM node_entities ne
+        JOIN entities e ON ne.entity_id = e.id
+        WHERE e.entity_type IS NOT NULL
+    """).fetchall()
+
+    for node_id, eid, etype in full_rows:
+        if eid not in entity_nodes:
+            entity_nodes[eid] = []
+        entity_nodes[eid].append((node_id, etype))
+        entity_type_map[eid] = etype
+
+    edges_created = 0
+    edges_checked = 0
+    now = datetime.now().isoformat()
+
+    # For each entity shared by multiple nodes: pair up nodes and apply rules
+    for eid, node_list in entity_nodes.items():
+        if len(node_list) < 2:
+            continue
+        etype = entity_type_map[eid]
+
+        for i in range(len(node_list)):
+            for j in range(i + 1, len(node_list)):
+                src_id, src_type = node_list[i]
+                tgt_id, tgt_type = node_list[j]
+
+                if src_id == tgt_id:
+                    continue
+
+                # Check rule for this type pair
+                rel_type = RELATION_RULES.get((src_type, tgt_type))
+                if rel_type is None:
+                    rel_type = RELATION_RULES.get((tgt_type, src_type))
+                if rel_type is None:
+                    rel_type = 'related_to'  # fallback
+
+                edges_checked += 1
+
+                if not dry_run:
+                    existing = conn.execute("""
+                        SELECT id FROM edges
+                        WHERE source_id=? AND target_id=?
+                        LIMIT 1
+                    """, (src_id, tgt_id)).fetchone()
+
+                    if not existing:
+                        conn.execute("""
+                            INSERT OR IGNORE INTO edges
+                            (source_id, target_id, weight, edge_type, created_at)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (src_id, tgt_id, 0.5, rel_type, now))
+                        edges_created += conn.execute("SELECT changes()").fetchone()[0]
+                else:
+                    edges_created += 1
+
+    if not dry_run:
+        conn.commit()
+    conn.close()
+
+    print(f"  Entity pairs checked: {edges_checked}")
+    print(f"  Edges {'would be ' if dry_run else ''}created: {edges_created}")
+    return {"checked": edges_checked, "edges_created": edges_created}
 
 def step_orphan_cleanup(db_path, dry_run=False):
     """Step 3: Find entities with very few connections."""
@@ -490,6 +628,12 @@ def run_all(db_path, dry_run=False):
         results['pagerank'] = {"error": str(e)}
 
     try:
+        results['spacy_relations'] = step_spacy_relations(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in spacy relations: {e}")
+        results['spacy_relations'] = {"error": str(e)}
+
+    try:
         results['relation_extraction'] = step_relation_extraction(db_path, dry_run)
     except Exception as e:
         print(f"  ERROR in relation extraction: {e}")
@@ -519,6 +663,19 @@ def run_all(db_path, dry_run=False):
         print(f"  ERROR in duplicate scan: {e}")
         results['duplicates'] = {"error": str(e)}
 
+    # Update last_sleep_at timestamp
+    if not dry_run:
+        try:
+            conn2 = __import__('sqlite3').connect(db_path)
+            conn2.execute("CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT)")
+            conn2.execute("INSERT OR REPLACE INTO metadata (key, value) VALUES ('last_sleep_at', ?)",
+                         [__import__('datetime').datetime.now().isoformat()])
+            conn2.commit()
+            conn2.close()
+        except Exception as e:
+            print(f"  WARNING: Could not update last_sleep_at: {e}")
+
+    # Also add spacy_relations step to run_all results
     elapsed = time.time() - t0
 
     # Rollback check: if any critical step had an error AND snapshot exists,
