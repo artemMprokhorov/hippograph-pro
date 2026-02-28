@@ -148,6 +148,24 @@ For a meaningful comparison, the right benchmark is: does the agent remember *yo
 
 ---
 
+## Scale & Performance
+
+HippoGraph is designed for **personal scale** — one user, one knowledge base, built over months and years.
+
+| Notes | Edges | Search latency | Sleep compute |
+|-------|-------|---------------|---------------|
+| ~500 | ~40K | 150–300ms | ~10s |
+| ~1,000 | ~100K | 200–500ms | ~30s |
+| ~5,000 | ~500K+ | 500ms–1s+ | minutes |
+
+Search latency is dominated by spreading activation — 3 iterations across the full edge graph. ANN search (HNSW) scales well; spreading activation scales with edge density.
+
+**Tested up to ~1,000 notes** in production. Beyond that, performance degrades gracefully but noticeably. For most personal use cases (daily notes, project context, research) you'll stay comfortably under 2,000 notes for years.
+
+If you need memory for thousands of users or millions of documents — this is the wrong tool. HippoGraph optimizes for depth over scale.
+
+---
+
 ## 🐏 Hardware Requirements
 
 | Configuration | RAM | CPU | Disk |
