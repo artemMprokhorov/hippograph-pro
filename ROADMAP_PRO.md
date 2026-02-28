@@ -214,6 +214,36 @@ Two-stage retrieval: coarse community/cluster index first, then precise SA insid
 **Recommended starting point:** Option A + B combined — lowest effort, highest immediate impact. Options C/D add on top. Option E is research-grade.
 
 
+
+### 22. TOTP Authentication for Studio MCP — MEDIUM PRIORITY
+
+**Problem:** studio-mcp (studio_exec, studio_write_file) имеет прямой shell-доступ к Mac Studio. Если Claude.ai аккаунт скомпрометирован — атакующий получает shell на сервере.
+
+**Solution:** TOTP (Time-based One-Time Password, RFC 6238) — тот же стандарт что Google Authenticator / Authy.
+
+**Flow:**
+1. Одноразовый setup: генерация секрета + QR код
+2. Артём сканирует QR в Authenticator — появляется запись "HippoGraph Studio"
+3. При вызове опасных инструментов (exec, write) studio-mcp проверяет last_verified_at
+4. Если прошло >24-48 часов — возвращает ошибку "требуется TOTP"
+5. Claude сообщает Артёму, Артём называет 6-значный код
+6. Claude передаёт код в следующем вызове, сервер валидирует
+7. Сессия открыта на настраиваемый период (default: 24h)
+
+**Implementation:**
+- [ ] Добавить `pyotp` в studio-mcp requirements (MIT лицензия)
+- [ ] setup_totp.py — генерация секрета, QR код в терминале (qrcode библиотека)
+- [ ] Хранить `last_verified_at` + `totp_secret` в studio-mcp/.totp (вне git)
+- [ ] studio_exec и studio_write_file: проверка сессии перед выполнением
+- [ ] Новый инструмент `studio_verify_totp(code)` для валидации
+- [ ] Настраиваемый TTL через .env: `TOTP_SESSION_TTL_HOURS=24`
+- [ ] studio_read_file и studio_list_dir — без TOTP (read-only, безопасно)
+
+**Rebuild:** после изменений studio-mcp требует rebuild (процедура в ARCHITECTURE.md)
+
+**Note:** pyotp работает офлайн — синхронизация по времени, не по сети.
+
+
 ## Out of Scope
 
 | Feature | Reason |
