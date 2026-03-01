@@ -224,9 +224,8 @@ For remote access via ngrok, see [MCP_CONNECTION.md](MCP_CONNECTION.md).
 | Note Versioning | ✅ Deployed | 5-version history per note |
 | RRF Fusion | ✅ Deployed | Alternative to weighted blend |
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
-| Skills Ingestion | 🔄 In Progress | Absorb skills as associative experience |
+| Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
 | Personal Continuity Benchmark | 📋 Planned | Measure AI-user continuity over time |
-| Multi-Agent Architecture | 📋 Research | Second agent, inter-agent memory sharing |
 
 ---
 
