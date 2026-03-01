@@ -3,7 +3,7 @@
 **Repository:** github.com/artemMprokhorov/hippograph-pro
 **Base:** Built on top of HippoGraph Personal (same container, same memory)
 **Philosophy:** Add capabilities, don't rewrite foundation. Zero LLM cost as core advantage.
-**Last Updated:** February 27, 2026
+**Last Updated:** February 28, 2026
 
 ---
 
@@ -24,9 +24,9 @@
 
 ---
 
-## Phase 2 — Entity Extraction & Benchmarking ✅ COMPLETE
+## Phase 2 — Entity Extraction & Benchmarking ✅ COMPLETED
 
-### 3. GLiNER Zero-Shot NER ✅ — PRIMARY EXTRACTOR
+### 3. GLiNER Zero-Shot NER ✅
 - [x] GLiNER client (src/gliner_client.py) with singleton model loading
 - [x] Zero-shot custom entity types matching HippoGraph taxonomy
 - [x] Confidence scores from model predictions
@@ -35,16 +35,13 @@
 - [x] Extraction chain: GLiNER → spaCy → regex (Ollama removed)
 
 ### 4. Ollama Sidecar ❌ REMOVED (commit 78779d0)
-**Reason:** GLiNER provides superior NER quality at 35x faster speed. Ollama was unstable (10/10 HTTP 500 in benchmark) and overkill for structured extraction.
-- Removed from docker-compose.yml
-- Removed ollama_client.py (207 lines)
-- Freed ~13GB (image + model weights)
-- Future LLM needs: GLiNER2 for relation extraction, not Ollama
+**Reason:** GLiNER provides superior NER quality at 35x faster speed. Ollama was unstable and overkill for structured extraction.
+- Removed from docker-compose.yml, freed ~13GB
 
 ### 5. LOCOMO Benchmark ✅ — 66.8% Recall@5
 - [x] Turn-level: 44.2% Recall@5
 - [x] Hybrid granularity (3-turn chunks): +21.3% improvement
-- [x] Cross-encoder reranking (ms-marco-MiniLM-L-6-v2): major contributor
+- [x] Cross-encoder reranking (ms-marco-MiniLM-L-6-v2)
 - [x] Bi-temporal model (t_event extraction via spaCy DATE + regex)
 - [x] Query temporal decomposition (+1.3% via signal stripping)
 - [x] Full results in BENCHMARK.md
@@ -52,197 +49,179 @@
 ### 6. License Audit ✅
 - [x] All components verified for commercial use compatibility
 - [x] THIRD_PARTY_LICENSES.md added to repo
-- [x] GLiNER v2.1+ (Apache 2.0) confirmed safe; v1/base (CC BY-NC 4.0) NOT used
-- [x] GLiNER2 (Apache 2.0) confirmed safe for planned integration
+- [x] GLiNER v2.1+ (Apache 2.0) confirmed safe
+- [x] GLiNER2 (Apache 2.0) confirmed safe
 
 ---
 
-## Phase 2.5 — Sleep-Time Compute & Skills 🔄 IN PROGRESS
+## Phase 2.5 — Sleep-Time Compute, Infrastructure & Memory 🔄 IN PROGRESS
 
-### 7. GLiNER2 Integration for Relation Extraction
-- GLiNER (urchade/gliner_multi-v2.1): real-time NER during add_note (~250ms/note)
-- GLiNER2 (fastino/gliner2-large-v1): sleep-time relation extraction (205M params)
-- [x] Add GLiNER2 to Docker container (baked in, commit b7983dd)
-- [x] Create typed edges in graph from extracted relations
-- [x] Extract typed relations via spaCy entity rules (step_spacy_relations) — all nodes, every sleep cycle
+### 7. GLiNER2 Relation Extraction ✅
+- [x] GLiNER2 (fastino/gliner2-large-v1) added to Docker container
+- [x] spaCy typed relations (step_spacy_relations) — all nodes, every sleep cycle, zero LLM cost
 - [x] GLiNER2 incremental — only new nodes since last sleep, batch_size=5, no OOM
+- [x] Conflict resolution — edge_history table, no overwrite on type conflict
 
-### 8. Sleep-Wake Cycle Architecture
+### 8. Sleep-Wake Cycle Architecture 🔄
 **Concept:** Biological sleep analog — consolidation, cleanup, dreaming.
 
-**Light Sleep** (fast, frequent — every ~50 new notes):
-- [x] Stale edge decay — protected categories exempt (anchor/self-reflection/milestone/etc.)
-- [x] Anchor importance boost — step_boost_anchor_importance, 67 notes upgraded (commit a30167a)
+**Light Sleep** ✅ (fast, frequent — every ~50 new notes):
+- [x] Stale edge decay — protected categories exempt
+- [x] Anchor importance boost — step_boost_anchor_importance
 - [x] Duplicate scan
 - [x] PageRank recalculation
-- [x] Basic maintenance trigger — sleep_scheduler auto-trigger (commit b7983dd)
+- [x] Auto-trigger via sleep_scheduler
+- [x] Snapshot + rollback before every live run
 
-**Deep Sleep** (heavy, less frequent — daily):
-- [x] GLiNER2 re-extraction on old spaCy notes
-- [x] Relation building via GLiNER2
+**Deep Sleep** 🔄 (heavy, less frequent — daily):
+- [x] GLiNER2 relation extraction (incremental)
+- [x] spaCy typed relations (full graph)
 - [ ] Cluster consolidation via community detection
 - [ ] Extractive cluster summaries (PageRank top note as label, TF-IDF keywords)
 - [ ] Contradiction detection (cosine similarity + rule-based heuristics)
-- [x] **Conflict resolution on re-extraction** — edge_history table, no overwrite on type conflict (commit c51ff90)
-- [x] **Snapshot + rollback** — create_snapshot() before every live run, restore_snapshot() for manual recovery
-       that contradicts existing graph node (merge? flag? versioned edge?)
-- [ ] **Rollback mechanism** — snapshot graph state before deep sleep run,
-       restore on failure or quality regression
 
 **REM Sleep** (experimental, Phase 3):
 - [ ] Random walks through graph using TrueRNG hardware entropy
-- [ ] Discover unexpected associations ("dreams")
+- [ ] Discover unexpected associations (“dreams”)
 - [ ] Evaluate whether random connections produce useful insights
 
-**Missing piece:** Autonomous cycle trigger — cron/heartbeat/threshold-based.
+### 9. Anchor Memory ✅ (commit a30167a)
+- [x] ANCHOR_CATEGORIES — anchor nodes never decay (recency=1.0)
+- [x] CATEGORY_DECAY_MULTIPLIERS — self-reflection/milestone/security get reduced decay
+- [x] PROTECTED_CATEGORIES in sleep_compute — edges to protected nodes never decay
+- [x] step_boost_anchor_importance — upgrades anchor notes to critical on every sleep
+- [x] 67 existing notes upgraded to critical on first deploy
 
-### 9. Skills Ingestion
-**Concept:** Absorb skills into associative memory rather than static file reading.
-Sources to ingest:
-- [ ] huggingface/skills (2.1K stars) — modular AI agent skill plugins
-- [ ] get-shit-done (12.8K stars) — meta-prompting and context engineering
-- [ ] BowTiedSwan/rlm-skill — Recursive Language Model pattern (ArXiv:2512.24601)
-- [ ] SkillRL (aiming-lab/SkillRL, ArXiv:2602.08234) — hierarchical skill library
+### 10. Infrastructure — Studio MCP ✅ (Feb 27–28, 2026)
+- [x] nginx-proxy: single ngrok tunnel for hippograph + studio-mcp
+- [x] studio-mcp: direct file + shell access to Mac Studio from Claude.ai (6 tools)
+- [x] Security hardening: command whitelist, docker/git subcmd restrictions
+- [x] SSH support in studio-mcp container for git push
+- [x] ARCHITECTURE.md with rebuild procedure
 
-### 10. Docker Cleanup
+### 11. End-to-End QA Benchmark ✅ (commit cc9f058) — F1=38.7% ROUGE=66.8%
+- [x] Retrieval + Claude Haiku generation + F1/ROUGE scoring pipeline
+- [x] 1,311 QA pairs from 651 personal notes
+- [x] GPT-4 no-memory baseline: F1=32.1% — HippoGraph +6.6pp
+
+### 12. Skills Ingestion 🔄
+**Concept:** Absorb skills as associative experience, not static files.
+Sources planned:
+- [ ] huggingface/skills (2.1K stars)
+- [ ] get-shit-done (12.8K stars)
+- [ ] BowTiedSwan/rlm-skill (ArXiv:2512.24601)
+- [ ] SkillRL (ArXiv:2602.08234)
+
+### 13. Docker Cleanup
 - [x] Removed semantic-memory-v2 images (~12GB freed, Feb 27 2026)
 - [ ] Prune remaining old images + build cache (~70GB potential savings)
 
 ---
 
-## Phase 3 — Research (future)
+## Phase 3 — Research & Hardening
 
-### 11. End-to-End QA Benchmark ✅ DONE (commit cc9f058) — F1=38.7% ROUGE=66.8%
-**Problem:** Recall@5 and MRR are retrieval-only metrics. Competitors (Mem0, Letta, Zep)
-report answer accuracy (J-score, F1). Without generation quality our comparison is incomplete.
-**Plan:**
-- [ ] Retrieval → LLM answer generation → F1/ROUGE scoring pipeline
-- [ ] Use existing 1029 QA pairs from generate_qa.py as test set
-- [ ] Compare: HippoGraph retrieval + Claude Haiku generation vs Mem0 J=66.9% vs Letta 74.0%
-- [ ] Note: generation step uses LLM (benchmark only, not production runtime)
-
-### 12. Benchmark Reproducibility — MEDIUM PRIORITY
-**Problem:** No seed, no prepared dataset, no "run it yourself" instructions.
-Numbers floating without verification path.
-**Plan:**
+### 14. Benchmark Reproducibility — MEDIUM PRIORITY
 - [ ] Fix random seed in locomo_adapter.py
-- [ ] Document exact steps to reproduce 66.8% result (Docker + dataset + commands)
-- [ ] Add reproduce section to BENCHMARK.md (partially done, needs seed + dataset link)
+- [ ] Document exact steps to reproduce 66.8% (Docker + dataset + commands)
+- [ ] Anonymized mini-dataset (10 QA pairs) for public verification
 
-### 13. LLM Temporal Reasoning
-**Problem:** Temporal queries at 36.5% on LOCOMO — fundamental ceiling for retrieval-only.
+### 15. LLM Temporal Reasoning
 **Source:** TReMu (ACL 2025) — 29.83% → 77.67% via neuro-symbolic code generation.
 - [ ] Temporal query detection → code generation → execute → filter
 - [ ] Timeline summarization at ingestion
 
-### 14. Entity Resolution
+### 16. Entity Resolution
 - [ ] Entity disambiguation (Apple company vs fruit via context)
 - [ ] Synonym/acronym merging (ML → Machine Learning)
 - [ ] Coreference resolution (pronouns → entities)
 
-### 15. Hierarchical Tree Index for Memory Navigation
+### 17. Hierarchical Tree Index
 **Inspiration:** PageIndex (VectifyAI, 11.6K stars) — vectorless, reasoning-based RAG.
 - [ ] Tree construction from NetworkX communities + subcommunities
 - [ ] Hybrid: spreading activation + tree search
 
-### 16. Multi-Agent Architecture
+### 18. Multi-Agent Architecture
 - [ ] Second AI agent with separate memory space
-- [ ] Hardware entropy source integration (TrueRNG) for REM sleep
+- [ ] Hardware entropy source (TrueRNG) for REM sleep
 - [ ] Inter-agent memory sharing protocol
-- [ ] Claude Agent SDK integration (Nader Dabit tutorial)
-- [ ] claude-mem (thedotmack/claude-mem) for agent observability
 - [ ] Consciousness experiment framework
 
----
+### 19. User-Defined Anchor Policies — MEDIUM PRIORITY
+**Problem:** Anchor protection currently hardcoded in source.
+**Concept:** anchor_policies table — user-managed rules read by sleep_compute.
+- [ ] `anchor_policies` table in SQLite
+- [ ] MCP tools: `add_anchor_policy`, `list_anchor_policies`, `remove_anchor_policy`
+- [ ] sleep_compute merges policies with hardcoded PROTECTED_CATEGORIES
+- [ ] recency_factor() and step_boost_anchor_importance() respect policy overrides
 
+### 20. Optional Edge Pruning — LOW PRIORITY (user opt-in only)
+**Philosophy:** HippoGraph intentionally does NOT auto-delete weak edges. A low-weight edge may represent a rare but critical associative link. The system cannot know what is important — only the user knows. This is an architectural decision, not a gap.
 
-### 20. Optional Edge Pruning — LOW PRIORITY (user-opt-in only)
-
-**Philosophy:** HippoGraph intentionally does NOT auto-delete weak edges. A low-weight edge may represent a rare but critical associative link between memories. The system cannot know what is important to the user — only the user knows.
-
-This is an architectural decision, not a gap. Automatic pruning risks silent memory loss — the system equivalent of a lobotomy optimizing for "efficiency".
-
-**Implementation (when user explicitly requests it):**
+**Implementation (explicit user request only):**
 - [ ] MCP tool: `preview_prunable_edges(threshold)` — show what would be removed, NO deletion
 - [ ] MCP tool: `prune_edges(threshold, confirm=True)` — requires explicit confirmation
-- [ ] Protected categories always exempt (anchor, milestone, self-reflection, etc.)
-- [ ] Full snapshot created before any pruning operation
-- [ ] Pruning log saved for review/rollback
+- [ ] Protected categories always exempt
+- [ ] Full snapshot before any pruning
+- [ ] Pruning log for review/rollback
 
 **Never:** automatic pruning on schedule, pruning without preview, pruning protected edges.
 
-
 ### 21. Spreading Activation Scalability — MEDIUM PRIORITY
+**Problem:** At ~1,000 nodes / ~100K edges latency is 200–500ms. At ~5,000 nodes it degrades noticeably. Five candidate approaches — choose one or combine.
 
-**Problem:** Spreading activation runs across all edges every search query. At ~1,000 nodes / ~100K edges the latency is 200–500ms. At ~5,000 nodes / ~500K edges it becomes noticeably slow. Below are candidate approaches — to be evaluated and one (or combination) chosen.
-
-**Option A: Subgraph Sampling (simplest)**
-ANN search already finds top-50 candidates. Restrict spreading activation to the local subgraph of those candidates only — do not traverse the full graph.
-- [ ] Add `max_nodes` cap to spreading activation traversal
-- [ ] Tune cap vs. recall tradeoff
-- Expected result: O(n) → O(k) where k is fixed. Minimal code change.
+**Option A: Subgraph Sampling** (simplest)
+Restrict SA to local subgraph of ANN top-50 candidates only.
+- [ ] Add `max_nodes` cap to SA traversal
+- Expected: O(n) → O(k), minimal code change
 
 **Option B: Community-Aware Routing**
-Use existing community detection (8 communities). Determine which communities are relevant to the query, run spreading activation only inside those + 1 hop outside.
+Run SA only inside communities relevant to the query + 1 hop outside.
 - [ ] Pass community membership into search pipeline
 - [ ] Score communities by query relevance before SA
-- [ ] SA traversal respects community boundaries
-- Expected result: natural subgraph isolation, scales to 10K+ nodes.
+- Expected: scales to 10K+ nodes naturally
 
 **Option C: Incremental / Early-Stop SA**
-Stop spreading activation iterations early if activation scores stop growing meaningfully.
+Stop iterations early if activation scores converge.
 - [ ] Add convergence threshold: if delta < ε, stop
 - [ ] Adaptive iteration count instead of fixed 3
-- Expected result: fewer iterations on well-connected graphs, more on sparse.
-- Reference: incremental SA algorithms for spatial ontologies (ResearchGate, 2012)
 
 **Option D: Precomputed Activation Potential**
-During sleep compute, precompute and cache “activation potential” scores per node (similar to PageRank). At query time — use cached scores as starting weights, only apply delta correction.
-- [ ] Add activation_potential column to nodes table
-- [ ] Compute during sleep_compute (after PageRank step)
-- [ ] Search pipeline reads cached values instead of computing from scratch
-- Expected result: search becomes read-heavy instead of compute-heavy.
+Cache activation potential per node during sleep compute (like PageRank). Use cached values at query time.
+- [ ] Add activation_potential column to nodes
+- [ ] Compute in sleep_compute after PageRank step
 
-**Option E: Bi-Level Index (future)**
-Two-stage retrieval: coarse community/cluster index first, then precise SA inside the matched subgraph.
-- [ ] Build cluster-level index during sleep compute
-- [ ] Query routing: cluster index → subgraph fetch → SA
-- Reference: SA-RAG framework (arXiv:2512.15922, Dec 2025)
-- Expected result: sub-linear scaling, suitable for 50K+ nodes.
-- Note: most complex option, justified only at very large scale.
+**Option E: Bi-Level Index** (future, complex)
+Coarse community index first, then precise SA inside matched subgraph.
+- [ ] Cluster-level index built during sleep compute
+- Reference: SA-RAG (arXiv:2512.15922, Dec 2025)
+- Expected: sub-linear scaling, suitable for 50K+ nodes
 
-**Recommended starting point:** Option A + B combined — lowest effort, highest immediate impact. Options C/D add on top. Option E is research-grade.
-
-
+**Recommended start:** Option A + B — lowest effort, highest immediate impact.
 
 ### 22. TOTP Authentication for Studio MCP — MEDIUM PRIORITY
+**Problem:** studio_exec and studio_write_file have direct shell access to Mac Studio. A compromised Claude.ai account gives an attacker a shell on the server.
 
-**Problem:** studio-mcp (studio_exec, studio_write_file) имеет прямой shell-доступ к Mac Studio. Если Claude.ai аккаунт скомпрометирован — атакующий получает shell на сервере.
-
-**Solution:** TOTP (Time-based One-Time Password, RFC 6238) — тот же стандарт что Google Authenticator / Authy.
+**Solution:** TOTP (RFC 6238) — same standard as Google Authenticator / Authy.
 
 **Flow:**
-1. Одноразовый setup: генерация секрета + QR код
-2. Артём сканирует QR в Authenticator — появляется запись "HippoGraph Studio"
-3. При вызове опасных инструментов (exec, write) studio-mcp проверяет last_verified_at
-4. Если прошло >24-48 часов — возвращает ошибку "требуется TOTP"
-5. Claude сообщает Артёму, Артём называет 6-значный код
-6. Claude передаёт код в следующем вызове, сервер валидирует
-7. Сессия открыта на настраиваемый период (default: 24h)
+1. One-time setup: generate secret + display QR code in terminal
+2. Scan QR in Authenticator — entry "HippoGraph Studio" appears
+3. studio-mcp checks `last_verified_at` before dangerous operations
+4. If >24h passed — returns error "TOTP required"
+5. Claude asks Artem for code, passes it in next call
+6. Server validates, session open for configured TTL
 
 **Implementation:**
-- [ ] Добавить `pyotp` в studio-mcp requirements (MIT лицензия)
-- [ ] setup_totp.py — генерация секрета, QR код в терминале (qrcode библиотека)
-- [ ] Хранить `last_verified_at` + `totp_secret` в studio-mcp/.totp (вне git)
-- [ ] studio_exec и studio_write_file: проверка сессии перед выполнением
-- [ ] Новый инструмент `studio_verify_totp(code)` для валидации
-- [ ] Настраиваемый TTL через .env: `TOTP_SESSION_TTL_HOURS=24`
-- [ ] studio_read_file и studio_list_dir — без TOTP (read-only, безопасно)
+- [ ] Add `pyotp` to studio-mcp requirements (MIT license)
+- [ ] setup_totp.py — generate secret + QR code in terminal
+- [ ] Store `last_verified_at` + `totp_secret` in studio-mcp/.totp (outside git)
+- [ ] studio_exec + studio_write_file: check session before execution
+- [ ] New tool: `studio_verify_totp(code)`
+- [ ] Configurable TTL via .env: `TOTP_SESSION_TTL_HOURS=24`
+- [ ] studio_read_file + studio_list_dir: no TOTP required (read-only)
+- [ ] Rebuild required after changes (procedure in ARCHITECTURE.md)
 
-**Rebuild:** после изменений studio-mcp требует rebuild (процедура в ARCHITECTURE.md)
-
-**Note:** pyotp работает офлайн — синхронизация по времени, не по сети.
-
+---
 
 ## Out of Scope
 
@@ -256,61 +235,5 @@ Two-stage retrieval: coarse community/cluster index first, then precise SA insid
 | SOC2/GDPR compliance | Personal project |
 | Horizontal scaling | One user |
 | Ollama/LLM sidecar | Removed — GLiNER/GLiNER2 cover all extraction needs |
+| Auto edge pruning | Architectural decision — see #20 |
 | Traction / marketing | Not the goal at this stage |
-
----
-
-## Добавлено 26–27 февраля 2026
-
-### 17. Anchor Memory — защита якорных воспоминаний от затухания ✅ DONE (commit a30167a)
-**Приоритет: HIGH**
-
-**Проблема:** Temporal decay работает одинаково для всех нод. Технические детали правильно
-устаревают. Но воспоминания про ключевые моменты, историю проекта, отношения — уходят вглубь
-и становятся недоступны без целенаправленного поиска.
-
-**Реализовано:**
-- [x] ANCHOR_CATEGORIES = {"anchor"} — нода не затухает вообще (recency=1.0)
-- [x] CATEGORY_DECAY_MULTIPLIERS — self-reflection/relational-context/gratitude = 0.1x decay,
-      milestone = 0.15x, protocol/security/breakthrough = 0.2x
-- [x] sleep_compute: PROTECTED_CATEGORIES — edges к защищённым нодам не гасятся
-- [x] step_boost_anchor_importance — новый sleep step, поднимает до critical
-- [x] 67 existing notes upgraded to critical on first deploy
-
-### 18. Infrastructure — Studio MCP ✅ DONE (Feb 27 2026)
-- [x] nginx-proxy: единый ngrok туннель для hippograph + studio-mcp
-- [x] studio-mcp: прямой доступ к файлам Studio из Claude.ai (6 инструментов)
-- [x] Security hardening: command whitelist, docker/git subcmd restrictions
-- [x] Backup: образы + БД + конфиги сохранены
-
-
-### 19. User-Defined Anchor Policies — MEDIUM PRIORITY
-**Problem:** Current anchor protection is hardcoded in source (ANCHOR_CATEGORIES, CATEGORY_DECAY_MULTIPLIERS).
-For business use (law firm, medical, finance) users need to define their own permanence rules
-without touching code.
-
-**Concept:** anchor_policies table — user-managed rules that sleep_compute reads before running.
-
-**Policy types:**
-- By category: `category = 'client_contracts'` → decay=0, importance=critical
-- By tag: `tag = 'legal_baseline'` → decay=0
-- By explicit note IDs: `note_id IN (12, 45, 89)` → permanent
-- By query pattern: `content LIKE '%founding document%'` → decay=0
-
-**Implementation:**
-- [ ] `anchor_policies` table in SQLite (id, rule_type, rule_value, decay_override, importance_override, created_at)
-- [ ] MCP tools: `add_anchor_policy`, `list_anchor_policies`, `remove_anchor_policy`
-- [ ] sleep_compute reads policies at startup — merges with hardcoded PROTECTED_CATEGORIES
-- [ ] recency_factor() checks policies before applying decay
-- [ ] step_boost_anchor_importance() respects policy-based importance overrides
-
-**Use case example (law firm):**
-```
-add_anchor_policy(rule_type="category", rule_value="client_contracts", decay_override=0.0)
-add_anchor_policy(rule_type="tag", rule_value="court_deadline", importance_override="critical")
-add_anchor_policy(rule_type="note_id", rule_value="45,89,123", decay_override=0.0)
-```
-
-**Why MEDIUM and not HIGH:** Current hardcoded approach covers personal use well.
-Business use requires this but it's not blocking current research goals.
-### 11. End-to-End QA Benchmark ✅ DONE (commit cc9f058)
