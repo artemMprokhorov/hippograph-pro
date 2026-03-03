@@ -71,6 +71,38 @@ def step_consolidation(db_path, dry_run=False):
     result = run_consolidation(db_path)
     return result
 
+
+
+def step_extractive_summary(db_path, dry_run=False):
+    """Step 1b: Extractive summaries for thematic clusters.
+
+    For each cluster found by memory_consolidation, identifies the single
+    note that best represents the cluster using TF-IDF + intra-cluster PageRank.
+    Stores result in cluster_summaries table.
+
+    Zero LLM cost. Pure math: numpy + collections.
+    Original notes preserved intact.
+    """
+    print("
+=== Step 1b: Extractive Cluster Summaries ===")
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from extractive_summary import run_extractive_summaries
+        from memory_consolidation import MemoryConsolidator
+    except ImportError as e:
+        print(f"  ⚠️ Import failed: {e}")
+        return {"skipped": True, "reason": str(e)}
+
+    c = MemoryConsolidator(db_path)
+    clusters = c.find_thematic_clusters()
+    if not clusters:
+        print("  No clusters found — skipping")
+        return {"clusters": 0, "representatives": 0}
+
+    result = run_extractive_summaries(db_path, clusters, dry_run=dry_run)
+    return result
+
 def step_pagerank(db_path, dry_run=False):
     """Step 2: Recalculate PageRank + communities."""
     print("\n=== Step 2: PageRank + Community Detection ===")
@@ -620,6 +652,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in consolidation: {e}")
         results['consolidation'] = {"error": str(e)}
+
+    try:
+        results['extractive_summary'] = step_extractive_summary(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in extractive summary: {e}")
+        results['extractive_summary'] = {"error": str(e)}
 
     try:
         results['pagerank'] = step_pagerank(db_path, dry_run)
