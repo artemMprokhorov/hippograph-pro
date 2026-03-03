@@ -83,8 +83,7 @@ def step_extractive_summary(db_path, dry_run=False):
     Zero LLM cost. Pure math: numpy + collections.
     Original notes preserved intact.
     """
-    print("
-=== Step 1b: Extractive Cluster Summaries ===")
+    print("\n=== Step 1b: Extractive Cluster Summaries ===")
     try:
         import sys, os
         sys.path.insert(0, os.path.dirname(__file__))
@@ -115,8 +114,7 @@ def step_contradiction_detection(db_path, dry_run=False):
     NEVER modifies or deletes notes. Report only.
     Zero LLM cost.
     """
-    print("
-=== Step 1c: Contradiction Detection ===")
+    print("\n=== Step 1c: Contradiction Detection ===")
     try:
         import sys, os
         sys.path.insert(0, os.path.dirname(__file__))

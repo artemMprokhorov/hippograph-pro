@@ -217,6 +217,33 @@ def create_app():
         _run_sleep_compute()
         return jsonify({"status": "triggered", "message": "sleep_compute started in background"})
 
+
+    @app.route("/api/sleep/run_sync", methods=["POST"])
+    def sleep_run_sync():
+        """Run sleep_compute synchronously and return full result (debug only)."""
+        api_key = request.args.get('api_key', '')
+        expected_key = os.getenv('NEURAL_API_KEY', '')
+        if not expected_key or api_key != expected_key:
+            return jsonify({"error": "unauthorized"}), 401
+        import sys, traceback
+        sys.path.insert(0, os.path.dirname(__file__))
+        try:
+            import importlib
+            import sleep_compute
+            importlib.reload(sleep_compute)
+            db_path = os.getenv('DB_PATH', '/app/data/memory.db')
+            dry_run = request.args.get('dry_run', 'false').lower() == 'true'
+            result = sleep_compute.run_all(db_path, dry_run=dry_run)
+            # Make result JSON-serializable
+            def safe(v):
+                if isinstance(v, (str, int, float, bool, type(None))): return v
+                if isinstance(v, dict): return {k: safe(vv) for k, vv in v.items()}
+                if isinstance(v, list): return [safe(i) for i in v]
+                return str(v)
+            return jsonify({"status": "ok", "result": safe(result)})
+        except Exception as e:
+            return jsonify({"status": "error", "error": str(e), "trace": traceback.format_exc()}), 500
+
     return app
 
 
