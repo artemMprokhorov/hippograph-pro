@@ -103,6 +103,31 @@ def step_extractive_summary(db_path, dry_run=False):
     result = run_extractive_summaries(db_path, clusters, dry_run=dry_run)
     return result
 
+
+
+def step_contradiction_detection(db_path, dry_run=False):
+    """Step 1c: Find potentially contradicting note pairs.
+
+    Detects notes that are semantically similar but contain
+    update/negation signals (e.g. 'no longer', 'changed', 'now', 'теперь').
+    Logs to contradiction_log table for human review.
+
+    NEVER modifies or deletes notes. Report only.
+    Zero LLM cost.
+    """
+    print("
+=== Step 1c: Contradiction Detection ===")
+    try:
+        import sys, os
+        sys.path.insert(0, os.path.dirname(__file__))
+        from contradiction_detection import run_contradiction_detection
+    except ImportError as e:
+        print(f"  ⚠️ Import failed: {e}")
+        return {"skipped": True, "reason": str(e)}
+
+    result = run_contradiction_detection(db_path, dry_run=dry_run)
+    return result
+
 def step_pagerank(db_path, dry_run=False):
     """Step 2: Recalculate PageRank + communities."""
     print("\n=== Step 2: PageRank + Community Detection ===")
@@ -658,6 +683,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in extractive summary: {e}")
         results['extractive_summary'] = {"error": str(e)}
+
+    try:
+        results['contradiction_detection'] = step_contradiction_detection(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in contradiction detection: {e}")
+        results['contradiction_detection'] = {"error": str(e)}
 
     try:
         results['pagerank'] = step_pagerank(db_path, dry_run)
