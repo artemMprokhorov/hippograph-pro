@@ -71,7 +71,7 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
 
 def find_contradictions(
     db_path: str,
-    similarity_threshold: float = 0.72,
+    similarity_threshold: float = 0.80,
     window_size: int = 100,
 ) -> List[Dict]:
     """
@@ -173,7 +173,7 @@ def find_contradictions(
 
 def run_contradiction_detection(
     db_path: str,
-    similarity_threshold: float = 0.72,
+    similarity_threshold: float = 0.80,
     window_size: int = 100,
     dry_run: bool = False,
 ) -> Dict:
