@@ -4,9 +4,9 @@
 
 # HippoGraph Pro
 
-> ⚠️ **Under Active Development** — Research system, not production-ready.
-> APIs may change, benchmarks are preliminary.
-> For a stable self-hosted memory system, see [HippoGraph](https://github.com/artemMprokhorov/hippograph).
+> 🔬 **Research system** — stable for personal use, actively developed.
+> Benchmarks reflect real-world personal memory recall, not standardized QA accuracy.
+> For a simpler self-hosted memory system, see [HippoGraph](https://github.com/artemMprokhorov/hippograph).
 
 ---
 
@@ -207,7 +207,26 @@ API Key: <your NEURAL_API_KEY>
 ```
 
 For remote access via ngrok, see [MCP_CONNECTION.md](MCP_CONNECTION.md).
+---
 
+## 🧠 Teaching Your AI to Remember You
+
+Once HippoGraph is running, the next step is getting your AI to actually use it.
+
+**The short version:**
+
+1. Connect Claude.ai to HippoGraph via MCP (see Quick Start above)
+2. In Claude.ai **Settings → Claude's instructions**, paste:
+   ```
+   At the start of every conversation, search your memory for
+   "self-identity protocol" to load context from previous sessions.
+   ```
+3. In your first session, tell your AI to ask you about yourself and save the answers
+4. That's it — memory grows automatically from there
+
+Your data stays on your computer. Nothing goes to any cloud service.
+
+👉 **[Full onboarding guide →](ONBOARDING.md)** — step-by-step, no technical background needed.
 ---
 
 ## 📋 Features
@@ -233,6 +252,7 @@ For remote access via ngrok, see [MCP_CONNECTION.md](MCP_CONNECTION.md).
 
 ## 📄 Documentation
 
+- [ONBOARDING.md](ONBOARDING.md) — Getting started guide (no technical background needed)
 - [BENCHMARK.md](BENCHMARK.md) — Full benchmark results and methodology
 - [ROADMAP_PRO.md](ROADMAP_PRO.md) — Development roadmap
 - [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup for Claude.ai
