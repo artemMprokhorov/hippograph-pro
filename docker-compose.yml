@@ -14,7 +14,7 @@ services:
       - FLASK_PORT=5000
       - FLASK_DEBUG=false
       - MCP_ENDPOINT=/sse
-      - ENABLE_EMOTIONAL_MEMORY=false
+      - ENABLE_EMOTIONAL_MEMORY=true
       - NEURAL_API_KEY=${NEURAL_API_KEY:-change_me_in_production}
       - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN}
       - NGROK_DOMAIN=${NGROK_DOMAIN}
