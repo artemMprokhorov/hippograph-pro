@@ -258,8 +258,10 @@ Your data stays on your computer. Nothing goes to any cloud service.
 ## 📄 Documentation
 
 - [ONBOARDING.md](ONBOARDING.md) — Getting started guide (no technical background needed)
+- [AGENT_PROMPT.md](AGENT_PROMPT.md) — System prompt + init script for your AI (start here after setup)
+- [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup and full tool reference
 - [BENCHMARK.md](BENCHMARK.md) — Full benchmark results and methodology
-- [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup and available tools reference
+- [.env.example](.env.example) — All tunable parameters with descriptions
 - [competitive_analysis.md](competitive_analysis.md) — Market positioning
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — License compliance
 - [docs/](docs/) — API reference, troubleshooting

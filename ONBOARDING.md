@@ -125,6 +125,9 @@ A: HippoGraph uses MCP (Model Context Protocol). Any AI that supports MCP can us
 
 ---
 
+> ✅ For a more complete system prompt that covers how to save, search, and maintain memory
+> — see [AGENT_PROMPT.md](AGENT_PROMPT.md). It also includes the init script for your first session.
+
 ## Template: Wake-Up Instruction
 
 Copy this into your AI's custom instructions:
