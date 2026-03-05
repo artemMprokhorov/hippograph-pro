@@ -106,7 +106,7 @@ See `.env.example` for all options. Key ones:
 | `ENTITY_EXTRACTOR` | `gliner` (best), `spacy` (fast), `regex` (minimal) | `gliner` |
 | `EMBEDDING_MODEL` | Sentence-transformer model for vector search | multilingual MiniLM |
 | `FUSION_METHOD` | `blend` (tunable weights) or `rrf` (no tuning needed) | `blend` |
-| `ENABLE_EMOTIONAL_MEMORY` | Store emotional tone/intensity on notes | `true` |
+| `ENABLE_EMOTIONAL_MEMORY` | Store emotional tone/intensity on notes | `false` |
 
 ⚠️ Changing `EMBEDDING_MODEL` requires re-indexing all notes:
 ```bash
