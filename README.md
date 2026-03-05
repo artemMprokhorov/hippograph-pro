@@ -249,6 +249,8 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | RRF Fusion | ✅ Deployed | Alternative to weighted blend |
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
 | Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
+| Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion (CRITICAL/HIGH/MEDIUM/LOW) |
+| Safe Skill Ingestion | ✅ Deployed | preview → confirm → add flow; importance=low to prevent skill override of identity notes |
 | Personal Continuity Benchmark | 📋 Planned | Measure AI-user continuity over time |
 
 ---
