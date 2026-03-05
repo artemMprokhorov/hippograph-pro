@@ -35,12 +35,17 @@ services:
       - RERANK_ENABLED=true
       - RERANK_TOP_N=20
       - RERANK_WEIGHT=0.3
+      - SLEEP_INTERVAL_HOURS=0
+      - SLEEP_NOTE_THRESHOLD=0
+      - DEEP_SLEEP_ENABLED=false
+      - SLEEP_ENABLED=false
       - USE_ANN_INDEX=true
       - ANN_INDEX_TYPE=HNSW
       - HNSW_M=32
       - HNSW_EF_CONSTRUCTION=64
       - HNSW_EF_SEARCH=32
     restart: "no"
+    mem_limit: 32g
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
       interval: 30s

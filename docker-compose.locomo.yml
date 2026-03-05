@@ -7,6 +7,7 @@ services:
     volumes:
       - ./data/benchmark:/app/data
       - ./src:/app/src
+      - ./benchmark:/app/benchmark
     environment:
       - DB_PATH=/app/data/locomo_test.db
       - FLASK_PORT=5000
@@ -18,6 +19,7 @@ services:
       - HALF_LIFE_DAYS=30
       - ENTITY_EXTRACTOR=spacy
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - BLEND_ALPHA=0.6
       - BLEND_GAMMA=0.15
       - BLEND_DELTA=0.1
