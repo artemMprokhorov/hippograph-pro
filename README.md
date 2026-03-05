@@ -259,8 +259,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 
 - [ONBOARDING.md](ONBOARDING.md) — Getting started guide (no technical background needed)
 - [BENCHMARK.md](BENCHMARK.md) — Full benchmark results and methodology
-- [ROADMAP_PRO.md](ROADMAP_PRO.md) — Development roadmap
-- [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup for Claude.ai
+- [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup and available tools reference
 - [competitive_analysis.md](competitive_analysis.md) — Market positioning
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — License compliance
 - [docs/](docs/) — API reference, troubleshooting
