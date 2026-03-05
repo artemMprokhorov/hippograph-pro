@@ -92,3 +92,5 @@ src/re_extract_entities.py
 benchmark/session_dia_map.json
 benchmarks/
 ROADMAP_PRO.md
+src/test_*.py
+src/_*.py
