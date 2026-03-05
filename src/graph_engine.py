@@ -363,6 +363,24 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     
     if slog: slog.mark("ann")
     
+    # Step 2a: Build subgraph (Subgraph Sampling optimization)
+    # SA runs only within the local neighborhood of ANN candidates,
+    # not across the full graph. This keeps iteration cost O(k * avg_degree)
+    # instead of O(n * avg_degree) where k << n.
+    # SA_SUBGRAPH_ENABLED=true by default; disable via env for full-graph mode.
+    import os as _os
+    sa_subgraph = _os.getenv("SA_SUBGRAPH_ENABLED", "true").lower() == "true"
+    if sa_subgraph and activations:
+        graph_cache = get_graph_cache()
+        # Collect seed nodes (ANN candidates) + their direct neighbors
+        subgraph_nodes = set(activations.keys())
+        for seed_id in list(activations.keys()):
+            for neighbor_id, _, _ in graph_cache.get_neighbors(seed_id):
+                subgraph_nodes.add(neighbor_id)
+        print(f"  Subgraph: {len(subgraph_nodes)} nodes (from {len(activations)} ANN seeds, full graph={len(get_all_nodes())})") 
+    else:
+        subgraph_nodes = None  # None = no restriction, full graph
+
     # Step 2: Spreading activation with normalization and damping
     for iteration in range(iterations):
         new_activations = {}
@@ -380,6 +398,10 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
             graph_cache = get_graph_cache()
             neighbors = graph_cache.get_neighbors(node_id)
             for neighbor_id, edge_weight, edge_type in neighbors:
+                
+                # Subgraph Sampling: skip neighbors outside our subgraph
+                if subgraph_nodes is not None and neighbor_id not in subgraph_nodes:
+                    continue
                 
                 # Spread activation through edge
                 spread = activation * edge_weight * decay
