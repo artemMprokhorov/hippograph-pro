@@ -106,6 +106,18 @@ def init_database():
             )
         """)
         
+        # anchor_policies: user-defined categories protected from decay/deletion
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS anchor_policies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL UNIQUE,
+                policy_type TEXT NOT NULL DEFAULT 'protect',
+                description TEXT,
+                created_at TEXT NOT NULL,
+                created_by TEXT DEFAULT 'user'
+            )
+        """)
+
         # Indexes for performance
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_id)")
@@ -230,6 +242,75 @@ def update_node(node_id, content=None, category=None, embedding=None, importance
         cursor.execute(sql, params)
         return cursor.rowcount > 0
 
+
+
+def get_anchor_policies() -> list:
+    """Get all user-defined anchor policies from DB.
+    Returns list of dicts with category, policy_type, description, created_at.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute(
+            'SELECT category, policy_type, description, created_at, created_by '
+            'FROM anchor_policies ORDER BY created_at ASC'
+        ).fetchall()
+        return [
+            {
+                'category': r['category'],
+                'policy_type': r['policy_type'],
+                'description': r['description'] or '',
+                'created_at': r['created_at'],
+                'created_by': r['created_by'] or 'user',
+            }
+            for r in rows
+        ]
+
+
+def add_anchor_policy(category: str, description: str = '', policy_type: str = 'protect') -> dict:
+    """Add a user-defined anchor policy.
+    category: note category to protect (e.g. 'project-decisions')
+    policy_type: 'protect' (default) - exempt from stale decay + boost to critical importance
+    Returns {'added': True} or {'error': message}
+    """
+    if not category or not category.strip():
+        return {'error': 'Category name required'}
+    category = category.strip().lower()
+    if policy_type not in ('protect',):
+        return {'error': "policy_type must be 'protect'"}
+    from datetime import datetime
+    now = datetime.now().isoformat()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        existing = cursor.execute(
+            'SELECT id FROM anchor_policies WHERE category = ?', (category,)
+        ).fetchone()
+        if existing:
+            return {'error': f"Policy for category '{category}' already exists"}
+        cursor.execute(
+            'INSERT INTO anchor_policies (category, policy_type, description, created_at) VALUES (?, ?, ?, ?)',
+            (category, policy_type, description, now)
+        )
+        return {'added': True, 'category': category, 'policy_type': policy_type}
+
+
+def remove_anchor_policy(category: str) -> dict:
+    """Remove a user-defined anchor policy.
+    Does NOT remove the category from HARDCODED_PROTECTED_CATEGORIES in sleep_compute.py.
+    Only removes from user-defined policies table.
+    Returns {'removed': True} or {'error': message}
+    """
+    if not category or not category.strip():
+        return {'error': 'Category name required'}
+    category = category.strip().lower()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        existing = cursor.execute(
+            'SELECT id FROM anchor_policies WHERE category = ?', (category,)
+        ).fetchone()
+        if not existing:
+            return {'error': f"No user-defined policy for category '{category}'"}
+        cursor.execute('DELETE FROM anchor_policies WHERE category = ?', (category,))
+        return {'removed': True, 'category': category}
 
 
 def merge_entities(keep_id: int, remove_id: int) -> dict:

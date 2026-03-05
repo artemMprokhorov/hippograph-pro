@@ -57,7 +57,7 @@ def handle_mcp_request(method, params):
 
 def get_tools_list():
     """Return list of available MCP tools"""
-    return [
+    tools = [
         {
             "name": "search_memory",
             "description": "Search through notes using spreading activation algorithm",
@@ -215,6 +215,38 @@ def get_tools_list():
             }
         }
     ]
+    # Extend with anchor policy tools
+    tools += [
+        {
+            "name": "list_anchor_policies",
+            "description": "List all anchor policies: hardcoded (system baseline, cannot be removed) + user-defined. Protected categories are exempt from stale edge decay and kept at critical importance.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "add_anchor_policy",
+            "description": "Add a user-defined anchor policy: protect a category from stale edge decay and keep notes at critical importance. Supplements hardcoded baseline.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Note category to protect (e.g. 'project-decisions')"},
+                    "description": {"type": "string", "description": "Optional: why this category is important"}
+                },
+                "required": ["category"]
+            }
+        },
+        {
+            "name": "remove_anchor_policy",
+            "description": "Remove a user-defined anchor policy. Cannot remove hardcoded system categories (anchor, self-reflection, etc).",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Category to unprotect"}
+                },
+                "required": ["category"]
+            }
+        }
+    ]
+    return tools
 
 
 def handle_tool_call(params):
@@ -268,6 +300,12 @@ def handle_tool_call(params):
         return tool_list_entity_candidates()
     elif tool_name == "merge_entities":
         return tool_merge_entities(args.get("keep_id"), args.get("remove_id"))
+    elif tool_name == "list_anchor_policies":
+        return tool_list_anchor_policies()
+    elif tool_name == "add_anchor_policy":
+        return tool_add_anchor_policy(args.get("category", ""), args.get("description", ""))
+    elif tool_name == "remove_anchor_policy":
+        return tool_remove_anchor_policy(args.get("category", ""))
     
     return {"error": {"code": -32602, "message": f"Unknown tool: {tool_name}"}}
 
@@ -634,6 +672,63 @@ def tool_search_stats():
         return {"content": [{"type": "text", "text": "\n".join(lines)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": f"❌ Search stats error: {e}"}]}
+
+
+HARDCODED_PROTECTED = {
+    "anchor", "self-reflection", "relational-context",
+    "gratitude", "milestone", "protocol", "security", "breakthrough"
+}
+
+
+def tool_list_anchor_policies():
+    """List all anchor policies: hardcoded + user-defined"""
+    from database import get_anchor_policies
+    user_policies = get_anchor_policies()
+    user_cats = {p['category'] for p in user_policies}
+
+    lines = ["Anchor Policies (protected from decay + kept at critical importance):\n"]
+    lines.append("  SYSTEM (hardcoded, cannot be removed):\n")
+    for cat in sorted(HARDCODED_PROTECTED):
+        lines.append(f"    - {cat}\n")
+
+    if user_policies:
+        lines.append("\n  USER-DEFINED:\n")
+        for p in user_policies:
+            desc = f" — {p['description']}" if p['description'] else ""
+            lines.append(f"    - {p['category']}{desc} (added {p['created_at'][:10]})\n")
+    else:
+        lines.append("\n  USER-DEFINED: none\n")
+
+    lines.append(f"\nTotal protected: {len(HARDCODED_PROTECTED) + len(user_policies)} categories")
+    return {"content": [{"type": "text", "text": "".join(lines)}]}
+
+
+def tool_add_anchor_policy(category: str, description: str = ""):
+    """Add user-defined anchor policy"""
+    if not category:
+        return {"error": {"code": -32602, "message": "category required"}}
+    category = category.strip().lower()
+    if category in HARDCODED_PROTECTED:
+        return {"content": [{"type": "text", "text": f"\u2139\ufe0f '{category}' is already in the hardcoded system baseline. No action needed."}]}
+    from database import add_anchor_policy
+    result = add_anchor_policy(category, description)
+    if 'error' in result:
+        return {"content": [{"type": "text", "text": f"\u274c {result['error']}"}]}
+    return {"content": [{"type": "text", "text": f"\u2705 Anchor policy added: '{category}' is now protected from stale decay and will be kept at critical importance."}]}
+
+
+def tool_remove_anchor_policy(category: str):
+    """Remove user-defined anchor policy"""
+    if not category:
+        return {"error": {"code": -32602, "message": "category required"}}
+    category = category.strip().lower()
+    if category in HARDCODED_PROTECTED:
+        return {"content": [{"type": "text", "text": f"\u274c Cannot remove '{category}' — it is a hardcoded system category. Only user-defined policies can be removed."}]}
+    from database import remove_anchor_policy
+    result = remove_anchor_policy(category)
+    if 'error' in result:
+        return {"content": [{"type": "text", "text": f"\u274c {result['error']}"}]}
+    return {"content": [{"type": "text", "text": f"\u2705 Anchor policy removed: '{category}' is no longer protected."}]}
 
 
 def tool_list_entity_candidates():

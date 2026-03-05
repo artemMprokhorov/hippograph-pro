@@ -472,11 +472,41 @@ def step_orphan_cleanup(db_path, dry_run=False):
             print(f"    ... and {len(orphans) - 5} more")
     return {"orphans": len(orphans), "details": [(o[0], o[1]) for o in orphans]}
 
-# Categories protected from stale edge decay
-PROTECTED_CATEGORIES = {
+# Hardcoded categories always protected from stale edge decay.
+# These cannot be removed by user policies - they are the system baseline.
+HARDCODED_PROTECTED_CATEGORIES = {
     "anchor", "self-reflection", "relational-context",
     "gratitude", "milestone", "protocol", "security", "breakthrough"
 }
+
+
+def get_protected_categories(db_path: str) -> set:
+    """Get effective protected categories: hardcoded + user-defined anchor policies.
+    
+    Hardcoded categories are always included regardless of user policies.
+    User can ADD more categories via add_anchor_policy MCP tool.
+    User can REMOVE only their own user-defined policies (not hardcoded).
+    """
+    categories = set(HARDCODED_PROTECTED_CATEGORIES)
+    try:
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        rows = conn.execute(
+            "SELECT category FROM anchor_policies WHERE policy_type = 'protect'"
+        ).fetchall()
+        conn.close()
+        user_cats = {r[0] for r in rows}
+        if user_cats:
+            print(f"  Anchor policies: {len(HARDCODED_PROTECTED_CATEGORIES)} hardcoded "
+                  f"+ {len(user_cats)} user-defined = {len(categories | user_cats)} total")
+        categories |= user_cats
+    except Exception as e:
+        print(f"  Warning: could not load user anchor policies: {e}")
+    return categories
+
+
+# Keep for backward compatibility - used at module level in some paths
+PROTECTED_CATEGORIES = HARDCODED_PROTECTED_CATEGORIES
 
 
 def step_stale_decay(db_path, dry_run=False):
@@ -487,6 +517,7 @@ def step_stale_decay(db_path, dry_run=False):
     """
     print("\n=== Step 4: Stale Edge Decay ===")
     cutoff = (datetime.now() - timedelta(days=STALE_EDGE_DAYS)).isoformat()
+    PROTECTED_CATEGORIES = get_protected_categories(db_path)
     conn = sqlite3.connect(db_path)
 
     # Count all stale edges
@@ -542,6 +573,7 @@ def step_boost_anchor_importance(db_path, dry_run=False):
     Sleep compute should reinforce anchor nodes, not let them fade.
     If a protected category note has importance != critical, upgrade it.
     """
+    PROTECTED_CATEGORIES = get_protected_categories(db_path)
     print("\n=== Step 4b: Anchor Importance Boost ===")
     conn = sqlite3.connect(db_path)
 
