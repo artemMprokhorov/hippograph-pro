@@ -45,6 +45,14 @@ NEGATION_PATTERNS_RU = [
 ]
 
 ALL_NEGATION_PATTERNS = NEGATION_PATTERNS_EN + NEGATION_PATTERNS_RU
+
+# Categories where semantic proximity alone signals identity conflict
+# No lexical patterns required - two similar statements about self = potential conflict
+IDENTITY_CATEGORIES = {
+    'self-identity', 'self-reflection', 'consciousness-research',
+    'critical-lesson', 'anchor',
+}
+IDENTITY_SIMILARITY_THRESHOLD = 0.50  # Lower bar - identity must be consistent
 _compiled = [re.compile(p, re.IGNORECASE) for p in ALL_NEGATION_PATTERNS]
 
 
@@ -166,6 +174,46 @@ def find_contradictions(
                 'newer_importance': newer['importance'],
             })
 
+
+    # --- Identity conflict detection ---
+    # For self-identity/self-reflection notes: semantic proximity alone is enough.
+    # No lexical signals required - identity should be consistent.
+    identity_notes = [n for n in notes if n["category"] in IDENTITY_CATEGORIES]
+    existing_pairs = {(c["older_id"], c["newer_id"]) for c in contradictions}
+
+    for i in range(len(identity_notes)):
+        a = identity_notes[i]
+        for j in range(i + 1, len(identity_notes)):
+            b = identity_notes[j]
+
+            pair = (min(a["id"], b["id"]), max(a["id"], b["id"]))
+            if pair in existing_pairs:
+                continue
+
+            sim = cosine_similarity(a["embedding"], b["embedding"])
+            if sim < IDENTITY_SIMILARITY_THRESHOLD:
+                continue
+
+            if a["timestamp"] <= b["timestamp"]:
+                older, newer = a, b
+            else:
+                older, newer = b, a
+
+            contradictions.append({
+                "older_id": older["id"],
+                "newer_id": newer["id"],
+                "similarity": round(sim, 4),
+                "severity": round(sim * 0.8, 4),
+                "older_category": older["category"],
+                "newer_category": newer["category"],
+                "older_snippet": older["content"][:120],
+                "newer_snippet": newer["content"][:120],
+                "signals": ["identity_conflict"],
+                "older_importance": older["importance"],
+                "newer_importance": newer["importance"],
+                "type": "identity_conflict",
+            })
+
     # Sort by severity descending
     contradictions.sort(key=lambda x: x['severity'], reverse=True)
     return contradictions
@@ -223,6 +271,7 @@ def run_contradiction_detection(
             similarity REAL,
             severity REAL,
             signals TEXT,
+            type TEXT DEFAULT 'general',
             status TEXT DEFAULT 'pending',
             created_at TEXT,
             resolved_at TEXT,
@@ -255,12 +304,14 @@ def run_contradiction_detection(
         signals_str = '; '.join(c['signals'])
         conn.execute("""
             INSERT INTO contradiction_log
-            (older_node_id, newer_node_id, similarity, severity, signals, status, created_at)
-            VALUES (?, ?, ?, ?, ?, 'pending', ?)
+            (older_node_id, newer_node_id, similarity, severity, signals, type, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)
         """, (
             c['older_id'], c['newer_id'],
             c['similarity'], c['severity'],
-            signals_str, now
+            signals_str,
+            c.get('type', 'general'),
+            now
         ))
         stored += 1
 
