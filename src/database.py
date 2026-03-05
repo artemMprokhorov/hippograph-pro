@@ -231,6 +231,93 @@ def update_node(node_id, content=None, category=None, embedding=None, importance
         return cursor.rowcount > 0
 
 
+
+def merge_entities(keep_id: int, remove_id: int) -> dict:
+    """Merge two entity nodes: transfer all node_entities links from remove_id
+    to keep_id, then delete remove_id.
+
+    Conservative: checks both exist, transfers links, deduplicates, deletes remove_id.
+    Returns summary of what was done. Never touches notes/nodes.
+    """
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        keep = cursor.execute(
+            'SELECT id, name, entity_type FROM entities WHERE id = ?', (keep_id,)
+        ).fetchone()
+        remove = cursor.execute(
+            'SELECT id, name, entity_type FROM entities WHERE id = ?', (remove_id,)
+        ).fetchone()
+
+        if not keep:
+            return {'error': f'Entity #{keep_id} not found'}
+        if not remove:
+            return {'error': f'Entity #{remove_id} not found'}
+
+        keep_links_before = cursor.execute(
+            'SELECT COUNT(*) FROM node_entities WHERE entity_id = ?', (keep_id,)
+        ).fetchone()[0]
+        remove_links = cursor.execute(
+            'SELECT node_id FROM node_entities WHERE entity_id = ?', (remove_id,)
+        ).fetchall()
+        remove_node_ids = [r[0] for r in remove_links]
+
+        transferred = 0
+        skipped = 0
+        for node_id in remove_node_ids:
+            existing = cursor.execute(
+                'SELECT 1 FROM node_entities WHERE node_id = ? AND entity_id = ?',
+                (node_id, keep_id)
+            ).fetchone()
+            if existing:
+                skipped += 1
+            else:
+                cursor.execute(
+                    'UPDATE node_entities SET entity_id = ? WHERE node_id = ? AND entity_id = ?',
+                    (keep_id, node_id, remove_id)
+                )
+                transferred += 1
+
+        cursor.execute('DELETE FROM node_entities WHERE entity_id = ?', (remove_id,))
+        cursor.execute('DELETE FROM entities WHERE id = ?', (remove_id,))
+
+        return {
+            'kept': {'id': keep_id, 'name': keep['name'], 'type': keep['entity_type']},
+            'removed': {'id': remove_id, 'name': remove['name'], 'type': remove['entity_type']},
+            'links_transferred': transferred,
+            'links_already_existed': skipped,
+            'keep_links_before': keep_links_before,
+            'keep_links_after': keep_links_before + transferred,
+        }
+
+
+def list_entity_candidates() -> dict:
+    """List entity merge candidates (read-only). Returns case variants grouped by lower(name)+type."""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        rows = cursor.execute("""
+            SELECT lower(name) as lname, entity_type,
+                   GROUP_CONCAT(id) as ids,
+                   GROUP_CONCAT(name, ' | ') as names,
+                   COUNT(*) as cnt
+            FROM entities
+            GROUP BY lower(name), entity_type
+            HAVING cnt > 1
+            ORDER BY cnt DESC
+        """).fetchall()
+        candidates = []
+        for r in rows:
+            ids = [int(i) for i in r[2].split(',')]
+            candidates.append({
+                'normalized_name': r[0],
+                'entity_type': r[1],
+                'variants': r[3],
+                'ids': ids,
+                'count': r[4],
+            })
+        total = cursor.execute('SELECT COUNT(*) FROM entities').fetchone()[0]
+        return {'candidates': candidates, 'total_entities': total}
+
 def set_importance(node_id, importance):
     """Set importance level for a node: 'critical', 'normal', or 'low'"""
     if importance not in ('critical', 'normal', 'low'):
@@ -306,15 +393,28 @@ def get_connected_nodes(node_id):
 
 
 def get_or_create_entity(name, entity_type="concept"):
-    """Get existing entity or create new one"""
+    """Get existing entity or create new one.
+    
+    Case normalization: lookup by lower(name) + entity_type.
+    If found, reuse existing entity regardless of original case.
+    This prevents case variants (git/Git/GIT) from creating duplicate nodes.
+    """
     name_lower = name.lower().strip()
     with get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM entities WHERE LOWER(name) = ?", (name_lower,))
+        # Match by normalized name AND type - different types are different entities
+        cursor.execute(
+            "SELECT id FROM entities WHERE LOWER(name) = ? AND entity_type = ?",
+            (name_lower, entity_type)
+        )
         row = cursor.fetchone()
         if row:
             return row["id"]
-        cursor.execute("INSERT INTO entities (name, entity_type) VALUES (?, ?)", (name, entity_type))
+        # Store with normalized (lowercase) name to keep graph consistent
+        cursor.execute(
+            "INSERT INTO entities (name, entity_type) VALUES (?, ?)",
+            (name_lower, entity_type)
+        )
         return cursor.lastrowid
 
 

@@ -196,6 +196,23 @@ def get_tools_list():
                     }
                 }
             }
+        },
+        {
+            "name": "list_entity_candidates",
+            "description": "List entity merge candidates (read-only). Shows case variants like git/Git/GIT grouped by normalized name and type.",
+            "inputSchema": {"type": "object", "properties": {}}
+        },
+        {
+            "name": "merge_entities",
+            "description": "Merge two entity nodes: transfer all graph links from remove_id to keep_id, then delete remove_id. Use list_entity_candidates first to find candidates. IRREVERSIBLE - take snapshot first.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "keep_id": {"type": "integer", "description": "Entity ID to keep"},
+                    "remove_id": {"type": "integer", "description": "Entity ID to remove (links transferred to keep_id)"}
+                },
+                "required": ["keep_id", "remove_id"]
+            }
         }
     ]
 
@@ -247,6 +264,10 @@ def handle_tool_call(params):
         return tool_search_stats()
     elif tool_name == "sleep_compute":
         return tool_sleep_compute(args.get("dry_run", False))
+    elif tool_name == "list_entity_candidates":
+        return tool_list_entity_candidates()
+    elif tool_name == "merge_entities":
+        return tool_merge_entities(args.get("keep_id"), args.get("remove_id"))
     
     return {"error": {"code": -32602, "message": f"Unknown tool: {tool_name}"}}
 
@@ -613,6 +634,45 @@ def tool_search_stats():
         return {"content": [{"type": "text", "text": "\n".join(lines)}]}
     except Exception as e:
         return {"content": [{"type": "text", "text": f"❌ Search stats error: {e}"}]}
+
+
+def tool_list_entity_candidates():
+    """List entity merge candidates (read-only)"""
+    from database import list_entity_candidates
+    result = list_entity_candidates()
+    candidates = result['candidates']
+    if not candidates:
+        text = f"No merge candidates found. Total entities: {result['total_entities']}"
+    else:
+        lines = [f"Entity merge candidates ({len(candidates)} groups, {result['total_entities']} total):\n"]
+        for c in candidates:
+            lines.append(
+                f"  [{c['entity_type']:12s}] {c['variants']}\n"
+                f"    ids: {c['ids']} (use merge_entities to consolidate)\n"
+            )
+        text = ''.join(lines)
+    return {"content": [{"type": "text", "text": text}]}
+
+
+def tool_merge_entities(keep_id, remove_id):
+    """Merge two entity nodes"""
+    if not keep_id or not remove_id:
+        return {"error": {"code": -32602, "message": "keep_id and remove_id required"}}
+    if keep_id == remove_id:
+        return {"error": {"code": -32602, "message": "keep_id and remove_id must be different"}}
+    from database import merge_entities
+    result = merge_entities(int(keep_id), int(remove_id))
+    if 'error' in result:
+        return {"content": [{"type": "text", "text": f"\u274c {result['error']}"}]}
+    text = (
+        f"\u2705 Entities merged:\n"
+        f"  Kept:    #{result['kept']['id']} '{result['kept']['name']}' [{result['kept']['type']}]\n"
+        f"  Removed: #{result['removed']['id']} '{result['removed']['name']}' [{result['removed']['type']}]\n"
+        f"  Links transferred: {result['links_transferred']}\n"
+        f"  Links already existed (deduped): {result['links_already_existed']}\n"
+        f"  Keep node now has {result['keep_links_after']} total links (was {result['keep_links_before']})"
+    )
+    return {"content": [{"type": "text", "text": text}]}
 
 
 def tool_sleep_compute(dry_run=False):
