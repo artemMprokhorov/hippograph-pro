@@ -241,6 +241,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Temporal Decay | ✅ Deployed | Important memories persist, trivial ones fade |
 | Anchor Protection | ✅ Deployed | Critical memories exempt from decay |
 | Sleep-Time Compute | ✅ Deployed | Background consolidation, relation extraction |
+| Contradiction Detection | ✅ Deployed | Finds conflicting memories; identity-aware mode (similarity alone triggers for self-reflection/anchor categories) |
 | PageRank + Communities | ✅ Deployed | Graph analytics, node importance scoring |
 | Note Versioning | ✅ Deployed | 5-version history per note |
 | RRF Fusion | ✅ Deployed | Alternative to weighted blend |
