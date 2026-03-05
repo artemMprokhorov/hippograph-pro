@@ -381,6 +381,39 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     else:
         subgraph_nodes = None  # None = no restriction, full graph
 
+    # Step 2b: Community-Aware Routing
+    # Further restrict subgraph to communities of ANN seeds + 1 hop outside.
+    # SA_COMMUNITY_ROUTING=true by default; disable via env.
+    sa_community = _os.getenv('SA_COMMUNITY_ROUTING', 'true').lower() == 'true'
+    if sa_community and activations:
+        try:
+            from graph_metrics import get_graph_metrics
+            metrics = get_graph_metrics()
+            seed_communities = set()
+            for seed_id in activations:
+                comm = metrics.get_community(seed_id)
+                if comm != -1:
+                    seed_communities.add(comm)
+            if seed_communities:
+                graph_cache = get_graph_cache()
+                community_nodes = set()
+                all_nodes_list = get_all_nodes()
+                for node in all_nodes_list:
+                    if metrics.get_community(node['id']) in seed_communities:
+                        community_nodes.add(node['id'])
+                boundary = community_nodes.copy()
+                for nid in boundary:
+                    for neighbor_id, _, _ in graph_cache.get_neighbors(nid):
+                        community_nodes.add(neighbor_id)
+                if subgraph_nodes is not None:
+                    subgraph_nodes = subgraph_nodes & community_nodes
+                else:
+                    subgraph_nodes = community_nodes
+                msg = 'Community routing: {} communities, {} nodes'.format(len(seed_communities), len(subgraph_nodes))
+                print('  ' + msg)
+        except Exception as e:
+            print('  Community routing skipped: {}'.format(e))
+
     # Step 2: Spreading activation with normalization and damping
     for iteration in range(iterations):
         new_activations = {}
