@@ -493,10 +493,25 @@ def get_or_create_entity(name, entity_type="concept"):
             return row["id"]
         # Store with normalized (lowercase) name to keep graph consistent
         cursor.execute(
-            "INSERT INTO entities (name, entity_type) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO entities (name, entity_type) VALUES (?, ?)",
             (name_lower, entity_type)
         )
-        return cursor.lastrowid
+        # lastrowid is 0 if INSERT was ignored (row already existed)
+        if cursor.lastrowid:
+            return cursor.lastrowid
+        # Row already existed - fetch it
+        row2 = cursor.execute(
+            "SELECT id FROM entities WHERE name = ? AND entity_type = ?",
+            (name_lower, entity_type)
+        ).fetchone()
+        if row2:
+            return row2["id"]
+        # Final fallback: search by lower(name) (old data may have different case)
+        row3 = cursor.execute(
+            "SELECT id FROM entities WHERE LOWER(name) = ? AND entity_type = ?",
+            (name_lower, entity_type)
+        ).fetchone()
+        return row3["id"] if row3 else None
 
 
 def link_node_to_entity(node_id, entity_id):

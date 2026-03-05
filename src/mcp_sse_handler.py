@@ -246,6 +246,21 @@ def get_tools_list():
             }
         }
     ]
+    tools += [
+        {
+            "name": "ingest_skill",
+            "description": "Ingest a skill from text/file into memory graph. Security scan runs automatically. First call returns preview + scan results. Call again with confirmed=True to add to memory.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "Raw skill content (SKILL.md text or description)"},
+                    "source": {"type": "string", "description": "Source URL or file path for auditability"},
+                    "confirmed": {"type": "boolean", "default": False, "description": "Set True after reviewing preview to actually add to memory"}
+                },
+                "required": ["content"]
+            }
+        }
+    ]
     return tools
 
 
@@ -306,6 +321,8 @@ def handle_tool_call(params):
         return tool_add_anchor_policy(args.get("category", ""), args.get("description", ""))
     elif tool_name == "remove_anchor_policy":
         return tool_remove_anchor_policy(args.get("category", ""))
+    elif tool_name == "ingest_skill":
+        return tool_ingest_skill(args.get("content", ""), args.get("source", ""), args.get("confirmed", False))
     
     return {"error": {"code": -32602, "message": f"Unknown tool: {tool_name}"}}
 
@@ -678,6 +695,47 @@ HARDCODED_PROTECTED = {
     "anchor", "self-reflection", "relational-context",
     "gratitude", "milestone", "protocol", "security", "breakthrough"
 }
+
+
+def tool_ingest_skill(content: str, source: str = '', confirmed: bool = False):
+    """Ingest a skill into memory with security scanning and preview."""
+    if not content or not content.strip():
+        return {"error": {"code": -32602, "message": "content required"}}
+
+    from skill_ingestion import ingest_skill
+    result = ingest_skill(content.strip(), source=source, confirmed=confirmed)
+
+    if result['status'] == 'preview':
+        text = result['preview'] + '\n\nCall again with confirmed=True to add to memory.'
+        return {"content": [{"type": "text", "text": text}]}
+
+    if result['status'] == 'blocked':
+        text = result['preview'] + '\n\n\u26a0\ufe0f  Skill blocked due to security findings. Review carefully before using confirmed=True.'
+        return {"content": [{"type": "text", "text": text}]}
+
+    # status == 'ingested' - actually add to memory
+    from graph_engine import add_note_with_links
+
+    note_content = result['note_content']
+    result_node = add_note_with_links(
+        content=note_content,
+        category='skill',
+        importance='low',
+    )
+
+    skill_name = result['skill']['name']
+    scan_summary = f"{result['scan'].risk_level} risk"
+    text = (
+        f"\u2705 Skill ingested: '{skill_name}'\n"
+        f"  Note ID: #{result_node.get('node_id', result_node) if isinstance(result_node, dict) else result_node}\n"
+        f"  Category: skill (importance: low)\n"
+        f"  Security scan: {scan_summary}\n"
+        f"  Source: {source or '(none)'}\n"
+        f"  Use set_importance to upgrade if this skill is critical."
+    )
+
+
+    return {"content": [{"type": "text", "text": text}]}
 
 
 def tool_list_anchor_policies():
