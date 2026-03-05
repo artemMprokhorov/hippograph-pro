@@ -240,6 +240,8 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Cross-Encoder Reranking | ✅ Deployed | Precision improvement, optional |
 | Temporal Decay | ✅ Deployed | Important memories persist, trivial ones fade |
 | Anchor Protection | ✅ Deployed | Critical memories exempt from decay |
+| User-Defined Anchor Policies | ✅ Deployed | Add/remove custom protected categories via MCP without code changes |
+| Entity Resolution | ✅ Deployed | Case normalization on ingestion; merge_entities + list_entity_candidates MCP tools |
 | Sleep-Time Compute | ✅ Deployed | Background consolidation, relation extraction |
 | Contradiction Detection | ✅ Deployed | Finds conflicting memories; identity-aware mode (similarity alone triggers for self-reflection/anchor categories) |
 | PageRank + Communities | ✅ Deployed | Graph analytics, node importance scoring |
