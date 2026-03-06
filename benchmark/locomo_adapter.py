@@ -36,7 +36,13 @@ import os
 import sys
 import time
 import argparse
+import random
+import numpy as np
 from pathlib import Path
+
+# Reproducibility: fixed seed ensures consistent results across runs
+random.seed(42)
+np.random.seed(42)
 
 # Config
 LOCOMO_DATA = "benchmark/locomo10.json"
