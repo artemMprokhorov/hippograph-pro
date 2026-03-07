@@ -53,13 +53,30 @@ Evaluated on [LOCOMO](https://github.com/snap-research/locomo) — 10 multi-sess
 | Hybrid + Reranking | 65.5% | 0.535 | ~1,960 notes |
 | + Bi-temporal δ signal | 66.0% | 0.546 | |
 | + Embedding enrichment ❌ | 65.6% | 0.545 | Reverted — polluted embeddings |
-| **+ Query decomposition** | **66.8%** | **0.549** | **Best** |
+| **+ Query decomposition** | **66.8%** | **0.549** | **Best (semantic-memory-v2, Feb)** |
+| hippograph-pro, category decay ON | 61.7% | 0.499 | New features introduced -5pp |
+| hippograph-pro, SA subgraph off | 61.8% | 0.500 | SA opts: negligible impact (0.1pp) |
+| **hippograph-pro, decay OFF** | **66.6%** | **0.554** | **Matches baseline — decay affects ranking** |
 
 **Key findings:**
 - Spreading activation validated: multi-hop improved from 27.4% (session) to 67.3% (best) — +39.9pp
 - Hybrid granularity (3-turn chunks) dramatically improves multi-hop retrieval
 - Cross-encoder reranking: major contributor to quality improvement
 - Temporal queries remain hardest category — fundamental ceiling for retrieval-only, requires reasoning layer
+
+---
+
+## Configuration Sensitivity
+
+These experiments isolate the contribution of individual pipeline components on LOCOMO hybrid granularity.
+
+| Component | Delta Recall@5 | Notes |
+|-----------|---------------|-------|
+| SA subgraph sampling (on vs off) | **+0.1pp** | Negligible — optimization only, not quality change |
+| SA community routing (on vs off) | **<0.1pp** | Negligible — same |
+| Category decay multipliers (on vs off) | **-5.0pp** | Significant — decay re-ranks LOCOMO notes incorrectly |
+
+**Key insight:** Category decay ( in ) is designed for personal memory — it protects , , and relationship notes from temporal decay. On LOCOMO data these categories don't exist, so decay distorts rankings. **For benchmark runs,  is set in .** In production, decay is correct behavior.
 
 ---
 

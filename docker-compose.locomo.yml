@@ -31,6 +31,11 @@ services:
       - HNSW_M=32
       - HNSW_EF_CONSTRUCTION=64
       - HNSW_EF_SEARCH=32
+      - SLEEP_ENABLED=false
+      - SLEEP_INTERVAL_HOURS=0
+      - SLEEP_NOTE_THRESHOLD=999999
+      - DEEP_SLEEP_ENABLED=false
+      - DISABLE_CATEGORY_DECAY=true
     restart: "no"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
