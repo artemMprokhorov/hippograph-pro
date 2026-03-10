@@ -81,7 +81,7 @@ HippoGraph works with any language your notes are written in — including mixed
 
 **Contradiction detection** has lexical signal patterns for: English, Russian, German, Spanish, French, Portuguese. For other languages, semantic similarity alone triggers contradiction detection — which is sufficient for most cases.
 
-**Deep Sleep extractive summaries** use a Unicode-aware tokenizer with stopwords for 6 languages (EN, RU, DE, ES, FR, PT). Chinese and Japanese are supported at character level — retrieval and associations work fully, summary quality is acceptable but not optimal (full CJK word segmentation is on the roadmap).
+**Deep Sleep extractive summaries** use a Unicode-aware tokenizer with stopwords for 6 languages (EN, RU, DE, ES, FR, PT). **Chinese is segmented via jieba** (word-level, installed by default) — this gives proper TF-IDF signal instead of treating the whole sentence as one token. Japanese and Korean use char-level Unicode tokenization, which works well for kana/hangul scripts.
 
 ### Language detection
 
@@ -95,9 +95,9 @@ Language detection is automatic and zero-dependency — no external library, pur
 | Spreading activation | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Entity extraction | ✅ | ✅ | ✅ | ⚠️ partial | ✅ |
 | Contradiction detection | ✅ | ✅ | ✅ | ✅ semantic | ✅ semantic |
-| Sleep summaries (TF-IDF) | ✅ | ✅ | ✅ | ⚠️ char-level | ✅ |
+| Sleep summaries (TF-IDF) | ✅ | ✅ | ✅ | ✅ ZH (jieba) / ⚠️ JA char-level | ✅ |
 
-> ⚠️ CJK: retrieval and associations are fully functional. Summary quality in Deep Sleep is reduced without proper word segmentation (jieba/fugashi). This is on the roadmap.
+> ⚠️ Chinese word segmentation via jieba is installed and active by default. Japanese/Korean use char-level tokenization — retrieval and associations are fully functional, summary quality in Deep Sleep is slightly reduced vs word-segmented languages.
 
 ---
 
