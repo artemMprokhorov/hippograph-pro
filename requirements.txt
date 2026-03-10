@@ -26,3 +26,8 @@ gliner>=0.2.25
 
 # GLiNER2: unified relation extraction + NER (sleep_compute deep phase, Apache 2.0)
 gliner2>=1.2.0
+
+# CJK word segmentation for Deep Sleep extractive summaries
+# jieba: Chinese word segmentation (MIT license, ~50MB dict)
+# Japanese/Korean work via char-level Unicode regex — no fugashi/unidic (~500MB) needed
+jieba>=0.42.1

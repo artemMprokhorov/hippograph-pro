@@ -12,15 +12,35 @@ Algorithm:
 
 Zero LLM cost. Pure math: numpy + collections.
 Original notes preserved intact — no compression, no deletion.
+
+CJK support: Chinese text is segmented via jieba (if installed).
+Japanese/Korean work via char-level Unicode regex.
+Set ENABLE_CJK=false to disable jieba even if installed.
 """
 import sqlite3
 import math
 import re
+import os
 import numpy as np
 from collections import Counter, defaultdict
 from datetime import datetime
 from typing import List, Dict, Tuple, Optional
 
+# CJK word segmentation — optional, graceful fallback if not installed
+# jieba (MIT) for Chinese; Japanese/Korean use char-level via _TOKEN_RE
+# Set ENABLE_CJK=false in .env to disable even if jieba is installed
+_JIEBA_AVAILABLE = False
+_CJK_ENABLED = os.environ.get('ENABLE_CJK', 'true').lower() != 'false'
+
+if _CJK_ENABLED:
+    try:
+        import jieba
+        jieba.setLogLevel(20)  # suppress jieba init messages
+        _JIEBA_AVAILABLE = True
+    except ImportError:
+        pass  # fallback to char-level tokenization
+
+# Regex to detect CJK characters in text
 
 # Stopwords for major languages supported by xx_ent_wiki_sm
 _STOPWORDS = {
@@ -59,6 +79,13 @@ _STOPWORDS = {
     'il', 'lo', 'la', 'gli', 'le', 'un', 'uno', 'una', 'di', 'del',
     'della', 'dei', 'degli', 'delle', 'in', 'nel', 'nella', 'nei',
     'che', 'con', 'per', 'non', 'su', 'ma', 'è', 'sono', 'io', 'tu',
+    # Chinese stopwords (中文)
+    '的', '了', '在', '是', '我', '不', '他', '这', '中', '大', '来', '上', '个',
+    '和', '到', '说', '为', '就', '以', '人', '都', '而', '可', '于', '及', '与',
+    '就', '她', '我们', '一个', '有', '这个', '对', '那', '要', '也', '这些',
+    # Japanese stopwords (日本語)
+    'の', 'に', 'は', 'を', 'が', 'で', 'と', 'も', 'や', 'か', 'から',
+    'です', 'ます', 'だ', 'だった', 'である', 'します', 'れる', 'される',
 }
 
 # Unicode token pattern: captures Latin, Cyrillic, CJK, Arabic, Hebrew,
@@ -78,9 +105,51 @@ _TOKEN_RE = re.compile(
     re.UNICODE
 )
 
+# Detects text that contains Chinese/Japanese/Korean characters
+_CJK_DETECT_RE = re.compile(
+    r'[一-鿿぀-ヿ가-힯]'
+)
+
+
+def _tokenize_cjk(text: str) -> List[str]:
+    """
+    CJK-aware tokenizer.
+    - Chinese segments: jieba (if available) or char-level fallback
+    - Non-CJK portions (Latin, Cyrillic, etc): standard _TOKEN_RE
+    - Hiragana/Katakana/Hangul: char-level via _TOKEN_RE
+    """
+    tokens = []
+
+    if _JIEBA_AVAILABLE:
+        # Split text into CJK and non-CJK spans
+        # Use a simple split: find consecutive CJK blocks and non-CJK blocks
+        parts = re.split(r'([\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]+)', text)
+        for part in parts:
+            if not part:
+                continue
+            if re.match(r'^[\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]+$', part):
+                # Chinese block -> jieba segmentation
+                tokens.extend(jieba.lcut(part))
+            else:
+                # Non-Chinese (Latin, Cyrillic, Hiragana, Katakana, etc)
+                tokens.extend(_TOKEN_RE.findall(part.lower()))
+    else:
+        # No jieba: char-level for everything
+        tokens.extend(_TOKEN_RE.findall(text.lower()))
+
+    return [
+        t.lower() for t in tokens
+        if t not in _STOPWORDS and len(t) > 1
+    ]
+
 
 def _tokenize(text: str) -> List[str]:
-    """Unicode-aware tokenizer supporting 50+ languages."""
+    """Unicode-aware tokenizer supporting 50+ languages.
+    Routes CJK text through jieba segmentation when available.
+    """
+    if _CJK_ENABLED and _CJK_DETECT_RE.search(text):
+        return _tokenize_cjk(text)
+
     text = text.lower()
     tokens = _TOKEN_RE.findall(text)
     return [
@@ -313,7 +382,8 @@ def run_extractive_summaries(
         })
 
     # Print summary
-    print(f"  Clusters processed: {stats['clusters']}")
+    cjk_status = f"jieba={'on' if _JIEBA_AVAILABLE else 'fallback(char-level)'}"
+    print(f"  Clusters processed: {stats['clusters']} [{cjk_status}]")
     print(f"  Representatives found: {stats['representatives']}")
     print(f"  Skipped: {stats['skipped']}")
     if stats['details']:

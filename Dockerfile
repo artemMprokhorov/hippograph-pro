@@ -27,6 +27,11 @@ RUN ARCH=$(dpkg --print-architecture) && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-warm jieba dictionary (Chinese word segmentation, MIT license)
+# Avoids first-run delay when processing CJK notes in Deep Sleep
+RUN python -c "import jieba; jieba.initialize()" \
+    || echo "WARNING: jieba pre-warm failed, will initialize at first use"
+
 # Download spaCy models for multilingual entity extraction
 RUN python -m spacy download en_core_web_sm
 RUN python -m spacy download xx_ent_wiki_sm
