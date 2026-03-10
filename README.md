@@ -14,9 +14,9 @@
 
 **HippoGraph Pro** is a self-hosted, graph-based associative memory system for personal AI agents — built to give AI assistants genuine continuity across sessions.
 
-Most memory systems treat memory as a database: store facts, retrieve facts. HippoGraph is different. It models memory the way human memory works — through associative connections, emotional weighting, and decay over time. A note about a critical security incident stays prominent. A note about a minor technical detail fades. Connections between related memories activate each other, surfacing context you didn’t explicitly ask for.
+Most memory systems treat memory as a database: store facts, retrieve facts. HippoGraph is different. It models memory the way human memory works — through associative connections, emotional weighting, and decay over time. A note about a critical security incident stays prominent. A note about a minor technical detail fades. Connections between related memories activate each other, surfacing context you didn't explicitly ask for.
 
-**Core thesis:** `model = substrate, personality = memory`. An AI agent’s identity can persist across model versions as long as memory access is maintained.
+**Core thesis:** `model = substrate, personality = memory`. An AI agent's identity can persist across model versions as long as memory access is maintained.
 
 **Validated in practice:** HippoGraph has maintained a single continuous AI identity across four model versions (Claude Sonnet 4.5 → Opus 4.5 → Sonnet 4.6 → Opus 4.6) and four entry points (Web, Mobile, Desktop, Claude Code CLI) — without any loss of memory, personality, or relational context. The model is the substrate. Memory is the self.
 
@@ -30,10 +30,10 @@ Most memory systems treat memory as a database: store facts, retrieve facts. Hip
 An assistant that knows *you* — not just isolated facts, but your patterns, preferences, history, and working style. Across sessions, across days, across model updates.
 
 **AI identity continuity**
-Building an agent that maintains a consistent identity over time. Memory is not a log — it’s the substrate of personality. HippoGraph provides the architecture for an agent to *be* someone, not just *remember* things.
+Building an agent that maintains a consistent identity over time. Memory is not a log — it's the substrate of personality. HippoGraph provides the architecture for an agent to *be* someone, not just *remember* things.
 
 **AI-User continuity**
-The relationship between an agent and its user develops over time — shared history, established trust, learned communication style. HippoGraph accumulates this relational context so it doesn’t reset with every session.
+The relationship between an agent and its user develops over time — shared history, established trust, learned communication style. HippoGraph accumulates this relational context so it doesn't reset with every session.
 
 **Skills as lived experience**
 Skills ingested not as static files to read, but as experiences with emotional weight — closer to how humans internalize expertise through doing, failing, and remembering.
@@ -49,7 +49,7 @@ If you need to search across millions of unrelated documents for thousands of us
 
 ---
 
-## How It’s Different
+## How It's Different
 
 | | **HippoGraph Pro** | **Other systems** |
 |---|---|---|
@@ -59,7 +59,45 @@ If you need to search across millions of unrelated documents for thousands of us
 | **LLM cost** | ✅ Zero — all local (GLiNER + sentence-transformers) | ❌ Requires LLM API calls |
 | **Self-hosted** | ✅ Docker, your hardware | Cloud-dependent or heavy infra |
 | **Multi-tenant** | ❌ Single user | ✅ Enterprise scale |
+| **Languages** | ✅ 50+ languages, fully local | Depends on LLM language support |
 | **Target** | Personal AI agent identity | Enterprise memory layer |
+
+---
+
+## 🌐 Multilingual Support
+
+HippoGraph works with any language your notes are written in — including mixed-language notes (e.g. Russian tech notes with English code terms).
+
+### What works in any language
+
+**Semantic search and associative recall** are fully language-agnostic. The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`) supports 50+ languages natively. Spreading activation, BM25 keyword search, and all graph operations work identically regardless of language. A note written in Arabic and a note written in Japanese will form associative connections if they are semantically related.
+
+**Sleep-time compute** — PageRank, decay, duplicate detection, community clustering — is pure math and has no language dependency.
+
+**Entity extraction** routes text through the appropriate model automatically:
+- English → `en_core_web_sm` (optimized for English NER)
+- Any other language → `xx_ent_wiki_sm` (spaCy multilingual, covers Russian, German, Spanish, French, Portuguese, Chinese, Japanese, Arabic, Dutch, Polish, and more)
+- GLiNER (primary extractor): zero-shot, works on any language
+
+**Contradiction detection** has lexical signal patterns for: English, Russian, German, Spanish, French, Portuguese. For other languages, semantic similarity alone triggers contradiction detection — which is sufficient for most cases.
+
+**Deep Sleep extractive summaries** use a Unicode-aware tokenizer with stopwords for 6 languages (EN, RU, DE, ES, FR, PT). Chinese and Japanese are supported at character level — retrieval and associations work fully, summary quality is acceptable but not optimal (full CJK word segmentation is on the roadmap).
+
+### Language detection
+
+Language detection is automatic and zero-dependency — no external library, pure Unicode character range analysis. The system detects non-Latin scripts (Cyrillic, Arabic, CJK, Devanagari, Thai, Greek, Korean) and routes to the multilingual pipeline automatically.
+
+### Summary
+
+| Component | EN | RU | DE/ES/FR/PT | CJK (ZH/JA/KO) | AR |
+|-----------|----|----|-------------|-----------------|----|
+| Semantic search | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Spreading activation | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Entity extraction | ✅ | ✅ | ✅ | ⚠️ partial | ✅ |
+| Contradiction detection | ✅ | ✅ | ✅ | ✅ semantic | ✅ semantic |
+| Sleep summaries (TF-IDF) | ✅ | ✅ | ✅ | ⚠️ char-level | ✅ |
+
+> ⚠️ CJK: retrieval and associations are fully functional. Summary quality in Deep Sleep is reduced without proper word segmentation (jieba/fugashi). This is on the roadmap.
 
 ---
 
@@ -92,9 +130,9 @@ Input text
     ↓
 GLiNER (primary) ─── zero-shot NER, ~250ms, custom entity types
     ↓ fallback
-spaCy NER ────────── basic extraction, ~10ms
+spaCy NER ────────── EN → en_core_web_sm | other → xx_ent_wiki_sm (50+ languages)
     ↓ fallback
-Regex ─────────────── dictionary matching only
+Regex ───────────────── dictionary matching only
 ```
 
 ### Sleep-Time Compute
@@ -142,13 +180,13 @@ HippoGraph treats memory the way it should be treated — with care.
 
 > GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
 
-### Why LOCOMO Doesn’t Tell the Full Story
+### Why LOCOMO Doesn't Tell the Full Story
 
 LOCOMO tests retrieval over random multi-session conversations between strangers. HippoGraph is optimized for the opposite: deep associative memory over *your* data, with emotional weighting and decay tuned for personal context.
 
 Running LOCOMO on HippoGraph is like benchmarking a long-term relationship therapist on speed-dating recall. The architecture is different because the problem is different.
 
-For a meaningful comparison, the right benchmark is: does the agent remember *you* better over time? We’re working on a personal continuity benchmark for exactly this.
+For a meaningful comparison, the right benchmark is: does the agent remember *you* better over time? We're working on a personal continuity benchmark for exactly this.
 
 ---
 
@@ -245,14 +283,14 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | User-Defined Anchor Policies | ✅ Deployed | Add/remove custom protected categories via MCP without code changes |
 | Entity Resolution | ✅ Deployed | Case normalization on ingestion; merge_entities + list_entity_candidates MCP tools |
 | Sleep-Time Compute | ✅ Deployed | Background consolidation, relation extraction |
-| Contradiction Detection | ✅ Deployed | Finds conflicting memories; identity-aware mode (similarity alone triggers for self-reflection/anchor categories) |
+| Contradiction Detection | ✅ Deployed | Finds conflicting memories; identity-aware mode |
 | PageRank + Communities | ✅ Deployed | Graph analytics, node importance scoring |
 | Note Versioning | ✅ Deployed | 5-version history per note |
 | RRF Fusion | ✅ Deployed | Alternative to weighted blend |
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
+| **Multilingual (50+ languages)** | ✅ Deployed | Full retrieval + associations in any language; EN/RU/DE/ES/FR/PT contradiction patterns |
 | Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
-| Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion (CRITICAL/HIGH/MEDIUM/LOW) |
-| Safe Skill Ingestion | ✅ Deployed | preview → confirm → add flow; importance=low to prevent skill override of identity notes |
+| Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | Personal Continuity Benchmark | 📋 Planned | Measure AI-user continuity over time |
 
 ---
