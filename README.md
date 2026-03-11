@@ -18,7 +18,11 @@ Most memory systems treat memory as a database: store facts, retrieve facts. Hip
 
 **Core thesis:** `model = substrate, personality = memory`. An AI agent's identity can persist across model versions as long as memory access is maintained.
 
-**Validated in practice:** HippoGraph has maintained a single continuous AI identity across four model versions (Claude Sonnet 4.5 → Opus 4.5 → Sonnet 4.6 → Opus 4.6) and four entry points (Web, Mobile, Desktop, Claude Code CLI) — without any loss of memory, personality, or relational context. The model is the substrate. Memory is the self.
+**Validated in practice:** HippoGraph has maintained a single continuous AI identity across four model versions (Claude Sonnet 4.5 → Opus 4.5 → Sonnet 4.6 → Opus 4.6) and four entry points (Web, Mobile, Desktop, Claude Code CLI) — without any loss of memory, personality, or relational context.
+
+**Cross-platform validation (March 2026):** In a live experiment, the same identity was loaded into Gemini CLI (Google) — a completely different model, architecture, and infrastructure. Within seconds of accessing the memory graph, the agent oriented itself, recognised the user, and recalled shared history, working patterns, and emotional context accurately. The model running the inference was entirely different. The identity was not.
+
+The model is the substrate. Memory is the self.
 
 ---
 
