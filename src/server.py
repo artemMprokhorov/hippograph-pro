@@ -16,7 +16,7 @@ sys.path.insert(0, '/app/src')
 
 from database import init_database
 from mcp_sse_handler import create_mcp_endpoint
-from ann_index import rebuild_index
+from ann_index import rebuild_index, fix_dimension_mismatch
 from database import get_all_nodes, get_all_edges
 from graph_cache import rebuild_graph_cache
 
@@ -38,6 +38,7 @@ def create_app():
     nodes = get_all_nodes()
     vector_count = rebuild_index(nodes)
     print(f"📊 Built ANN index with {vector_count} vectors")
+    fix_dimension_mismatch()
     
     # Build graph cache for fast edge traversal
     edges = get_all_edges()

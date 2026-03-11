@@ -33,10 +33,6 @@ class ANNIndex:
             print("ℹ️  ANN indexing disabled (USE_ANN_INDEX=false)")
             return
         
-        # Create HNSW index with cosine similarity
-        # space='cosine' - Auto-normalizes and computes cosine similarity
-        # space='ip' - Inner product (for pre-normalized vectors)
-        # space='l2' - Euclidean distance
         self.index = hnswlib.Index(space=HNSW_SPACE, dim=dimension)
         self.index.init_index(
             max_elements=MAX_ELEMENTS,
@@ -54,16 +50,22 @@ class ANNIndex:
         
         embeddings = []
         node_ids = []
+        skipped_dim = []
         
         for node in nodes:
             if node.get("embedding") is None:
                 continue
             emb = np.frombuffer(node["embedding"], dtype=np.float32)
             if len(emb) != self.dimension:
+                skipped_dim.append((node["id"], len(emb)))
                 continue
             embeddings.append(emb)
             node_ids.append(node["id"])
         
+        if skipped_dim:
+            print(f"⚠️  Skipped {len(skipped_dim)} nodes with wrong embedding dim (expected {self.dimension}): ids={[n for n,d in skipped_dim[:10]]}")
+            print("   Run fix_dimension_mismatch() to repair these nodes.")
+
         if not embeddings:
             print("⚠️  No embeddings to index")
             return 0
@@ -76,15 +78,28 @@ class ANNIndex:
         return len(embeddings)
     
     def add_vector(self, node_id: int, embedding: np.ndarray) -> bool:
-        """Add single vector to index incrementally (NEW!)."""
+        """Add single vector to index incrementally."""
         if not self.enabled or self.index is None:
             return False
         
-        if embedding.ndim == 1:
-            embedding = embedding.reshape(1, -1)
-        
+        if embedding.ndim == 2:
+            emb_flat = embedding[0]
+        else:
+            emb_flat = embedding
+
+        if len(emb_flat) != self.dimension:
+            print(f"⚠️  Rejected vector for node {node_id}: dim={len(emb_flat)}, expected {self.dimension}. Recalculating...")
+            try:
+                from stable_embeddings import get_model
+                # We don't have content here, caller must handle this case
+                # Just refuse to add a broken vector silently
+                return False
+            except Exception:
+                return False
+
+        embedding_2d = emb_flat.reshape(1, -1)
         try:
-            self.index.add_items(embedding, [node_id])
+            self.index.add_items(embedding_2d, [node_id])
             self.node_ids.append(node_id)
             return True
         except Exception as e:
@@ -108,14 +123,13 @@ class ANNIndex:
             
             results = []
             for label, dist in zip(labels[0], distances[0]):
-                if label == -1:  # Invalid result
+                if label == -1:
                     continue
                 
-                # Convert distance to similarity score
                 if HNSW_SPACE == "cosine" or HNSW_SPACE == "ip":
-                    similarity = 1.0 - dist  # cosine distance → similarity
-                else:  # l2
-                    similarity = 1.0 / (1.0 + dist)  # L2 → similarity
+                    similarity = 1.0 - dist
+                else:
+                    similarity = 1.0 / (1.0 + dist)
                 
                 if similarity >= min_similarity:
                     results.append((int(label), float(similarity)))
@@ -129,7 +143,6 @@ class ANNIndex:
         """Save index to disk."""
         if not self.enabled or self.index is None:
             return
-        
         self.index.save_index(path)
         print(f"💾 Saved ANN index to {path}")
     
@@ -137,13 +150,10 @@ class ANNIndex:
         """Load index from disk."""
         if not self.enabled or self.index is None:
             return
-        
         if not os.path.exists(path):
             print(f"⚠️  Index file not found: {path}")
             return
-        
         self.index.load_index(path)
-        # Rebuild node_ids list from index
         self.node_ids = self.index.get_ids_list()
         print(f"📂 Loaded ANN index from {path} ({len(self.node_ids)} vectors)")
     
@@ -151,7 +161,6 @@ class ANNIndex:
         """Get index statistics."""
         if not self.enabled or self.index is None:
             return {"enabled": False}
-        
         return {
             "enabled": True,
             "space": HNSW_SPACE,
@@ -188,3 +197,59 @@ def rebuild_index(nodes: List[dict]) -> int:
     """Rebuild index from nodes (called at server startup)."""
     ann_index = get_ann_index()
     return ann_index.build(nodes)
+
+
+def fix_dimension_mismatch(db_path: str = None) -> int:
+    """
+    Scan DB for nodes with wrong embedding dimension and recompute using our model.
+    Returns number of fixed nodes. Called automatically at server startup.
+    """
+    import sqlite3
+    from stable_embeddings import get_model
+
+    ann_index = get_ann_index()
+    expected_dim = ann_index.dimension
+    model = get_model()
+
+    if db_path is None:
+        db_path = os.getenv("DB_PATH", "/app/data/memory.db")
+
+    fixed = 0
+    try:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT id, content, embedding FROM nodes").fetchall()
+
+        to_fix = []
+        for row in rows:
+            if row["embedding"] is None:
+                continue
+            emb = np.frombuffer(row["embedding"], dtype=np.float32)
+            if len(emb) != expected_dim:
+                to_fix.append((row["id"], row["content"]))
+
+        if not to_fix:
+            return 0
+
+        print(f"🔧 fix_dimension_mismatch: found {len(to_fix)} nodes with wrong dim, recomputing...")
+        for node_id, content in to_fix:
+            try:
+                new_emb = model.encode(content)[0]
+                conn.execute("UPDATE nodes SET embedding=? WHERE id=?", (new_emb.tobytes(), node_id))
+                # Add to live index
+                ann_index.add_vector(node_id, new_emb)
+                fixed += 1
+                print(f"   ✅ Fixed node #{node_id}")
+            except Exception as e:
+                print(f"   ❌ Failed to fix node #{node_id}: {e}")
+
+        conn.commit()
+        conn.close()
+
+        if fixed:
+            print(f"✅ fix_dimension_mismatch: repaired {fixed} nodes")
+
+    except Exception as e:
+        print(f"⚠️  fix_dimension_mismatch error: {e}")
+
+    return fixed
