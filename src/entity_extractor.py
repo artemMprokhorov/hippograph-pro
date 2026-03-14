@@ -125,6 +125,32 @@ KNOWN_ENTITIES = {
     "chile": ("Chile", "location"),
 }
 
+
+# Synonym normalization: map abbreviations and variants to canonical forms
+SYNONYMS = {
+    # ML/AI abbreviations
+    "ml": "machine learning",
+    "ai": "artificial intelligence",
+    "nlp": "natural language processing",
+    "cv": "computer vision",
+    "dl": "deep learning",
+    "rl": "reinforcement learning",
+    "rag": "retrieval augmented generation",
+    # Infrastructure
+    "k8s": "kubernetes",
+    "tf": "tensorflow",
+    "hf": "hugging face",
+    "pg": "postgresql",
+    # Project-specific
+    "hippograph pro": "hippograph",
+    "neural memory": "hippograph",
+    "semantic memory": "hippograph",
+    # Russian synonyms
+    "машинное обучение": "machine learning",
+    "искусственный интеллект": "artificial intelligence",
+    "нейронная сеть": "neural network",
+}
+
 # Enhanced spaCy label mapping with more types
 SPACY_LABEL_MAP = {
     "PERSON": "person",
@@ -207,9 +233,10 @@ def is_valid_entity(text: str) -> bool:
 
 
 def normalize_entity(text: str) -> str:
-    """Normalize entity text for deduplication"""
+    """Normalize entity text for deduplication. Applies synonym mapping."""
     text = " ".join(text.split())
     text = text.strip(".,!?;:'\"()[]{}").lower()
+    text = SYNONYMS.get(text, text)
     return text
 
 

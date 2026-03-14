@@ -330,6 +330,31 @@ def handle_tool_call(params):
 def tool_search_memory(query: str, limit: int, max_results: int = 10, detail_mode: str = "full", category: str = None, 
                       time_after: str = None, time_before: str = None, entity_type: str = None):
     """Search with spreading activation and optional filters (category, time range, entity type)"""
+    # 15e: dateparser - parse relative temporal expressions if time_after/time_before not set
+    if not time_after and not time_before:
+        try:
+            import dateparser
+            from datetime import datetime, timedelta
+            import re
+            query_lower = query.lower()
+            now = datetime.now()
+            # Patterns: last week, last month, yesterday, today, last N days
+            if re.search(r'last week|\u043f\u0440\u043e\u0448\u043b', query_lower):
+                time_after = (now - timedelta(days=7)).isoformat()
+            elif re.search(r'last month|\u043f\u0440\u043e\u0448\u043b.*\u043c\u0435\u0441', query_lower):
+                time_after = (now - timedelta(days=30)).isoformat()
+            elif re.search(r'yesterday|\u0432\u0447\u0435\u0440\u0430', query_lower):
+                time_after = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0).isoformat()
+                time_before = now.replace(hour=0, minute=0, second=0).isoformat()
+            elif re.search(r'today|\u0441\u0435\u0433\u043e\u0434\u043d\u044f', query_lower):
+                time_after = now.replace(hour=0, minute=0, second=0).isoformat()
+            elif m := re.search(r'last (\d+) days?', query_lower):
+                days = int(m.group(1))
+                time_after = (now - timedelta(days=days)).isoformat()
+            if time_after:
+                print(f"📅 dateparser: time_after={time_after[:10]} (from query: {query!r})")
+        except Exception as e:
+            print(f"⚠️  dateparser skipped: {e}")
     response = search_with_activation_protected(
         query=query,
         limit=limit,

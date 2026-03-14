@@ -31,3 +31,4 @@ gliner2>=1.2.0
 # jieba: Chinese word segmentation (MIT license, ~50MB dict)
 # Japanese/Korean work via char-level Unicode regex — no fugashi/unidic (~500MB) needed
 jieba>=0.42.1
+dateparser
