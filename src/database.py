@@ -17,9 +17,10 @@ ENABLE_EMOTIONAL_MEMORY = os.getenv("ENABLE_EMOTIONAL_MEMORY", "false").lower() 
 @contextmanager
 def get_connection():
     """Context manager for database connections"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
     try:
         yield conn
         conn.commit()

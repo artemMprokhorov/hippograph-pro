@@ -294,6 +294,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Note Versioning | ✅ Deployed | 5-version history per note |
 | RRF Fusion | ✅ Deployed | Alternative to weighted blend |
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
+| Temporal Edges v2 | ✅ Deployed | 100% node coverage with timestamp-based chronological links |
 | **Multilingual (50+ languages)** | ✅ Deployed | Full retrieval + associations in any language; EN/RU/DE/ES/FR/PT contradiction patterns |
 | Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |

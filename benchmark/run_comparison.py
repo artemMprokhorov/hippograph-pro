@@ -17,7 +17,7 @@ import json, os, sys, time, argparse, urllib.request, urllib.parse, statistics
 from datetime import datetime
 
 SYSTEMS = [
-    {"name": "HippoGraph Pro", "url": "http://172.17.0.1:5001", "api_key": "REDACTED_API_KEY", "skip_load": True, "color": "HippoGraph"},
+    {"name": "HippoGraph Pro", "url": "http://172.17.0.1:5001", "api_key": os.getenv("NEURAL_API_KEY", "change_me"), "skip_load": True, "color": "HippoGraph"},
     {"name": "HippoGraph LOCOMO", "url": "http://172.17.0.1:5004", "api_key": "locomo_key_2026", "skip_load": False, "color": "HippoGraph-LOCOMO"},
     {"name": "Cosine Only", "url": "http://localhost:5021", "api_key": "benchmark_key_locomo_2026", "skip_load": False, "color": "Cosine"},
     {"name": "BM25 Only", "url": "http://localhost:5020", "api_key": "benchmark_key_locomo_2026", "skip_load": False, "color": "BM25"},

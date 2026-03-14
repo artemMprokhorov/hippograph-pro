@@ -171,6 +171,33 @@ Query → Embedding → ANN Search (HNSW, top-K=5)
 
 ---
 
+## Temporal Edges v2 — March 2026
+
+Timestamp-based temporal edges connecting every note to its ±3 chronological neighbors (by timestamp, with t_event_start priority). Deployed to production March 14, 2026.
+
+| Metric | v1 (t_event_start only) | v2 (all nodes) |
+|--------|------------------------|----------------|
+| Coverage | 44 nodes (6%) | 776 nodes (100%) |
+| TEMPORAL_BEFORE | 126 | 2,400 |
+| TEMPORAL_AFTER | 126 | 2,400 |
+| Weight | 0.4 | 0.4 |
+
+### LOCOMO Impact (identical methodology, text-matching)
+
+| Category | Baseline | + Temporal v2 | Delta |
+|----------|----------|---------------|-------|
+| Overall | 65.4% | 65.2% | -0.2pp |
+| Temporal | 40.6% | 41.7% | +1.1pp |
+| Single-hop | 64.5% | 64.9% | +0.4pp |
+| Multi-hop | 62.9% | 62.0% | -0.9pp |
+| Open-domain | 69.4% | 69.2% | -0.2pp |
+
+LOCOMO impact is minimal because LOCOMO uses abstract temporal references. For personal memory with explicit dates and chronological context, manual testing shows stronger activation clustering (+15-20% activation scores for chronological neighbors).
+
+Script: 
+
+---
+
 ## Reproduce
 
 ```bash

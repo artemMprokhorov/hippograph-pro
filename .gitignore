@@ -99,3 +99,16 @@ src/_*.py
 RESTORE.md
 *_RESTORE.md
 RECOVERY.md
+# One-off experiment scripts
+benchmark/run_bench.py
+benchmark/run_bench_baseline.py
+benchmark/run_final_optimal.py
+benchmark/run_temporal_baseline.py
+benchmark/run_variant_a.py
+benchmark/run_variant_c.py
+benchmark/run_reranker_extra.py
+benchmark/run_sweep.sh
+
+# Experiment docker-compose files
+docker-compose.temporal.yml
+docker-compose.timestamp.yml
