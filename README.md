@@ -296,6 +296,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Bi-Temporal Model | ✅ Deployed | Event time extraction for temporal queries |
 | Temporal Edges v2 | ✅ Deployed | 100% node coverage with timestamp-based chronological links |
 | **CONTRADICTS Edges** | ✅ Deployed | Biological cognitive dissonance: contradicting notes suppress each other (0.5x penalty when contradicting note is active in retrieval) |
+| **EMOTIONAL_RESONANCE Edges** | ✅ Deployed | Amygdala analog: notes sharing 2+ emotional tone tags form affective links (Jaccard weight, max 5 per note, 1016 edges) |
 | **Temporal Filtering (dateparser)** | ✅ Deployed | Natural language time queries: "last week", "на прошлой неделе", "yesterday" auto-convert to time filters |
 | **Synonym Normalization** | ✅ Deployed | Abbreviation + cross-lingual expansion: 50+ pairs EN/RU/ES/DE/FR/PT; search-time `normalize_query()` maps any language to canonical EN form |
 | **Multilingual (50+ languages)** | ✅ Deployed | Full retrieval + associations in any language; EN/RU/DE/ES/FR/PT contradiction patterns |
