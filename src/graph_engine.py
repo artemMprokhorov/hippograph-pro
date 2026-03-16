@@ -14,7 +14,7 @@ from database import (
     create_node, get_node, get_all_nodes, touch_node,
     create_edge, get_connected_nodes,
     get_or_create_entity, link_node_to_entity, get_nodes_by_entity,
-    get_entity_counts_batch
+    get_entity_counts_batch, get_connection
 )
 from stable_embeddings import get_model
 from entity_extractor import extract_entities, normalize_query
@@ -284,12 +284,12 @@ def add_note_with_links(content, category="general", importance="normal", force=
     temporal_links = 0
     try:
         node_t_event = None
-        with get_connection(db_path) as _tc:
+        with get_connection() as _tc:
             _row = _tc.execute('SELECT t_event_start FROM nodes WHERE id=?', (node_id,)).fetchone()
             if _row:
                 node_t_event = _row[0]
         if node_t_event:
-            with get_connection(db_path) as _tc:
+            with get_connection() as _tc:
                 _neighbors = _tc.execute(
                     """SELECT id, t_event_start FROM nodes
                        WHERE t_event_start IS NOT NULL AND id != ?
