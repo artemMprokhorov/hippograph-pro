@@ -832,6 +832,211 @@ def step_emotional_resonance(db_path, dry_run=False):
     return {'edges_created': created, 'pairs_checked': pairs_checked}
 
 
+
+def step_emergence_check(db_path, dry_run=False):
+    """Step 6: Emergence detection — measure graph self-organization.
+
+    Three signals (all read-only, zero writes to existing data):
+    1. Convergence: random seed nodes -> spreading activation -> how concentrated is top-1?
+    2. phi_proxy: information integration across communities (simplified IIT)
+    3. Self-referential precision@5: can the graph find notes about itself?
+
+    Logs composite emergence_score to emergence_log table.
+    Zero LLM cost. Pure graph math.
+    """
+    import numpy as np
+    import random
+    print("\n=== Step 6: Emergence Check (item #34) ===")
+
+    conn = sqlite3.connect(db_path)
+
+    # === Ensure emergence_log table ===
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS emergence_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT NOT NULL,
+            convergence_score REAL,
+            phi_proxy REAL,
+            self_ref_precision REAL,
+            composite_score REAL,
+            details TEXT
+        )
+    """)
+    conn.commit()
+
+    # === Signal 1: Convergence without external query ===
+    # Pick 5 random seed nodes, run mini spreading activation via edges,
+    # measure how quickly activation concentrates on top-1 node.
+    node_ids = [r[0] for r in conn.execute("SELECT id FROM nodes").fetchall()]
+    edges_raw = conn.execute(
+        "SELECT source_id, target_id, weight FROM edges"
+    ).fetchall()
+
+    # Build adjacency list
+    adj = {}  # node_id -> [(neighbor_id, weight)]
+    for src, tgt, w in edges_raw:
+        adj.setdefault(src, []).append((tgt, w))
+
+    convergence_scores = []
+    n_seeds = min(5, len(node_ids))
+    if n_seeds > 0:
+        seeds = random.sample(node_ids, n_seeds)
+        for seed in seeds:
+            # Mini spreading activation: 3 iterations from single seed
+            activations = {seed: 1.0}
+            for _ in range(3):
+                new_act = {}
+                for nid, act in activations.items():
+                    if act < 0.01:
+                        continue
+                    new_act[nid] = new_act.get(nid, 0) + act * 0.5
+                    for neighbor, weight in adj.get(nid, []):
+                        spread = act * weight * 0.7
+                        new_act[neighbor] = new_act.get(neighbor, 0) + spread
+                # Normalize
+                if new_act:
+                    mx = max(new_act.values())
+                    if mx > 0:
+                        new_act = {k: v / mx for k, v in new_act.items()}
+                activations = new_act
+
+            if activations:
+                vals = sorted(activations.values(), reverse=True)
+                total = sum(vals)
+                top1 = vals[0]
+                # Convergence = how much of total activation is in top-1
+                conv = top1 / total if total > 0 else 0
+                convergence_scores.append(conv)
+
+    convergence = float(np.mean(convergence_scores)) if convergence_scores else 0.0
+    print(f"  Convergence: {convergence:.4f} (from {n_seeds} seeds)")
+
+    # === Signal 2: phi_proxy (information integration) ===
+    # phi = (cross_cluster_edges * avg_weight) / (total_nodes * max(isolated_components, 1))
+    from graph_metrics import get_graph_metrics
+    metrics = get_graph_metrics()
+    if not metrics.is_computed:
+        # Fallback: compute if not yet initialized (standalone run)
+        metrics.compute(edges_raw, node_ids)
+
+    total_nodes = len(node_ids)
+    isolated = sum(1 for v in metrics._communities.values() if v == -1)
+    n_communities = len(metrics._community_sizes)
+
+    cross_cluster_edges = 0
+    cross_weights = []
+    for src, tgt, w in edges_raw:
+        c_src = metrics._communities.get(src, -1)
+        c_tgt = metrics._communities.get(tgt, -1)
+        if c_src != c_tgt and c_src != -1 and c_tgt != -1:
+            cross_cluster_edges += 1
+            cross_weights.append(w)
+
+    avg_cross_weight = float(np.mean(cross_weights)) if cross_weights else 0.0
+    phi_raw = (cross_cluster_edges * avg_cross_weight) / (total_nodes * max(isolated + 1, 1))
+    # Normalize to 0-1 via tanh saturation (threshold ~30 = mature graph)
+    import math
+    phi_proxy = math.tanh(phi_raw / 30.0)
+    print(f"  phi_proxy: {phi_proxy:.4f} (raw={phi_raw:.2f}, cross_edges={cross_cluster_edges}, "
+          f"avg_w={avg_cross_weight:.3f}, nodes={total_nodes}, isolated={isolated})")
+
+    # === Signal 3: Self-referential precision@5 ===
+    # Query the graph about itself using embeddings (no LLM).
+    # Check if top-5 results include self-referential categories.
+    SELF_REF_CATEGORIES = {
+        'self-reflection', 'self-identity', 'self-awareness',
+        'consciousness-research', 'breakthrough', 'origin',
+    }
+    SELF_QUERIES = [
+        "what do you know about your own memory",
+        "who am I and what is my identity",
+        "how does this memory system work",
+    ]
+
+    # Load embeddings
+    emb_rows = conn.execute(
+        "SELECT id, category, embedding FROM nodes WHERE embedding IS NOT NULL"
+    ).fetchall()
+    node_embs = {}
+    node_cats = {}
+    for nid, cat, blob in emb_rows:
+        if blob:
+            node_embs[nid] = np.frombuffer(blob, dtype=np.float32)
+            node_cats[nid] = cat
+
+    self_ref_precisions = []
+    try:
+        from stable_embeddings import get_model
+        model = get_model()
+
+        for q in SELF_QUERIES:
+            q_emb = model.encode(q)[0]
+            # Compute similarities
+            sims = []
+            for nid, emb in node_embs.items():
+                norm_q = np.linalg.norm(q_emb)
+                norm_e = np.linalg.norm(emb)
+                if norm_q > 0 and norm_e > 0:
+                    sim = float(np.dot(q_emb, emb) / (norm_q * norm_e))
+                    sims.append((nid, sim))
+            sims.sort(key=lambda x: x[1], reverse=True)
+            top5 = sims[:5]
+            hits = sum(1 for nid, _ in top5 if node_cats.get(nid) in SELF_REF_CATEGORIES)
+            self_ref_precisions.append(hits / 5.0)
+    except Exception as e:
+        print(f"  Self-ref embedding failed: {e}")
+
+    self_ref_precision = float(np.mean(self_ref_precisions)) if self_ref_precisions else 0.0
+    print(f"  Self-referential P@5: {self_ref_precision:.4f} (from {len(SELF_QUERIES)} queries)")
+
+    # === Composite score ===
+    composite = 0.3 * convergence + 0.4 * phi_proxy + 0.3 * self_ref_precision
+    print(f"  Composite emergence: {composite:.4f}")
+
+    # === Log to emergence_log ===
+    import json
+    details = json.dumps({
+        "n_seeds": n_seeds,
+        "convergence_scores": [round(s, 4) for s in convergence_scores],
+        "cross_cluster_edges": cross_cluster_edges,
+        "phi_raw": round(phi_raw, 4),
+        "avg_cross_weight": round(avg_cross_weight, 4),
+        "communities": n_communities,
+        "isolated": isolated,
+        "self_ref_per_query": [round(p, 4) for p in self_ref_precisions],
+        "total_nodes": total_nodes,
+        "total_edges": len(edges_raw),
+    })
+
+    if not dry_run:
+        conn.execute("""
+            INSERT INTO emergence_log
+            (timestamp, convergence_score, phi_proxy, self_ref_precision, composite_score, details)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (datetime.now().isoformat(), convergence, phi_proxy, self_ref_precision, composite, details))
+        conn.commit()
+        print("  Logged to emergence_log")
+    else:
+        print("  [DRY RUN] Would log to emergence_log")
+
+    # === Compare with previous ===
+    prev = conn.execute(
+        "SELECT composite_score, timestamp FROM emergence_log ORDER BY id DESC LIMIT 1 OFFSET 1"
+    ).fetchone()
+    if prev:
+        delta = composite - prev[0]
+        direction = "+" if delta >= 0 else ""
+        print(f"  vs previous ({prev[1][:10]}): {direction}{delta:.4f}")
+
+    conn.close()
+    return {
+        "convergence": round(convergence, 4),
+        "phi_proxy": round(phi_proxy, 4),
+        "self_ref_precision": round(self_ref_precision, 4),
+        "composite": round(composite, 4),
+    }
+
+
 def run_all(db_path, dry_run=False):
     """Run all sleep-time compute steps."""
     t0 = time.time()
@@ -915,6 +1120,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in anchor boost: {e}")
         results['anchor_boost'] = {"error": str(e)}
+
+    try:
+        results['emergence'] = step_emergence_check(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in emergence check: {e}")
+        results['emergence'] = {"error": str(e)}
 
     try:
         results['duplicates'] = step_duplicate_scan(db_path, dry_run)
