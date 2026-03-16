@@ -17,7 +17,7 @@ from database import (
     get_entity_counts_batch
 )
 from stable_embeddings import get_model
-from entity_extractor import extract_entities
+from entity_extractor import extract_entities, normalize_query
 from ann_index import get_ann_index
 from graph_cache import get_graph_cache
 
@@ -369,6 +369,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     except Exception:
         pass
     
+    search_query = normalize_query(search_query)
     query_emb = model.encode(search_query)[0]
     if slog: slog.mark("embedding")
     

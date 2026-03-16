@@ -25,8 +25,7 @@ GENERIC_STOPWORDS = {
     # English temporal generics
     "today", "yesterday", "tomorrow", "now", "then",
     # English demonstratives
-    "this", "that", "these", "those",
-    # Russian ordinals and sequence words
+    "this", "that", "these", "those",# Russian ordinals and sequence words
     "первый", "второй", "третий", "четвёртый", "пятый", "последний", "следующий", "предыдущий",
     # Russian number words
     "один", "два", "три", "четыре", "пять", "шесть", "семь", "восемь", "девять", "десять",
@@ -43,9 +42,7 @@ GENERIC_STOPWORDS = {
     "не", "но", "да", "нет", "вот", "так", "все", "всё", "мне", "мой", "моя", "моё",
     # Russian multi-word stopwords
     "моё имя", "мое имя", "на самом деле", "в том числе", "в первую очередь",
-}
-
-# Expanded known entities with tech stack, concepts, and tools
+}# Expanded known entities with tech stack, concepts, and tools
 KNOWN_ENTITIES = {
     # Programming languages
     "python": ("Python", "tech"),
@@ -74,8 +71,7 @@ KNOWN_ENTITIES = {
     "tensorflow": ("TensorFlow", "tech"),
     "transformers": ("Transformers", "tech"),
     "huggingface": ("Hugging Face", "tech"),
-    "faiss": ("FAISS", "tech"),
-    "numpy": ("NumPy", "tech"),
+    "faiss": ("FAISS", "tech"),"numpy": ("NumPy", "tech"),
     "pandas": ("Pandas", "tech"),
     "spacy": ("spaCy", "tech"),
     # Databases & Storage
@@ -104,8 +100,7 @@ KNOWN_ENTITIES = {
     "memory": ("memory", "concept"),
     "graph": ("graph", "concept"),
     "knowledge": ("knowledge", "concept"),
-    "semantic": ("semantic", "concept"),
-    "activation": ("activation", "concept"),
+    "semantic": ("semantic", "concept"),"activation": ("activation", "concept"),
     "spreading activation": ("spreading activation", "concept"),
     "entity": ("entity", "concept"),
     "consciousness": ("consciousness", "concept"),
@@ -127,6 +122,7 @@ KNOWN_ENTITIES = {
 
 
 # Synonym normalization: map abbreviations and variants to canonical forms
+# Applied during BOTH ingestion (normalize_entity) and search (normalize_query)
 SYNONYMS = {
     # ML/AI abbreviations
     "ml": "machine learning",
@@ -135,8 +131,7 @@ SYNONYMS = {
     "cv": "computer vision",
     "dl": "deep learning",
     "rl": "reinforcement learning",
-    "rag": "retrieval augmented generation",
-    # Infrastructure
+    "rag": "retrieval augmented generation",# Infrastructure
     "k8s": "kubernetes",
     "tf": "tensorflow",
     "hf": "hugging face",
@@ -145,13 +140,59 @@ SYNONYMS = {
     "hippograph pro": "hippograph",
     "neural memory": "hippograph",
     "semantic memory": "hippograph",
-    # Russian synonyms
+    # Russian (RU) — 15+ pairs
     "машинное обучение": "machine learning",
     "искусственный интеллект": "artificial intelligence",
     "нейронная сеть": "neural network",
-}
-
-# Enhanced spaCy label mapping with more types
+    "нейронные сети": "neural network",
+    "обработка естественного языка": "natural language processing",
+    "компьютерное зрение": "computer vision",
+    "глубокое обучение": "deep learning",
+    "обучение с подкреплением": "reinforcement learning",
+    "большая языковая модель": "large language model",
+    "языковая модель": "language model",
+    "векторное представление": "embedding",
+    "векторные представления": "embeddings",
+    "смысловой поиск": "semantic search",
+    "граф знаний": "knowledge graph",
+    "распространение активации": "spreading activation",
+    "память": "memory",
+    "сознание": "consciousness",
+    "хиппограф": "hippograph",# Spanish / Chilean (ES)
+    "aprendizaje automático": "machine learning",
+    "inteligencia artificial": "artificial intelligence",
+    "red neuronal": "neural network",
+    "redes neuronales": "neural network",
+    "procesamiento de lenguaje natural": "natural language processing",
+    "visión por computadora": "computer vision",
+    "aprendizaje profundo": "deep learning",
+    "modelo de lenguaje": "language model",
+    "búsqueda semántica": "semantic search",
+    "grafo de conocimiento": "knowledge graph",
+    "memoria": "memory",
+    # German (DE)
+    "maschinelles lernen": "machine learning",
+    "künstliche intelligenz": "artificial intelligence",
+    "neuronales netz": "neural network",
+    "neuronale netze": "neural network",
+    "sprachmodell": "language model",
+    "wissensgraph": "knowledge graph",
+    # French (FR)
+    "apprentissage automatique": "machine learning",
+    "intelligence artificielle": "artificial intelligence",
+    "réseau de neurones": "neural network",
+    "modèle de langage": "language model",
+    "graphe de connaissances": "knowledge graph",
+    "mémoire": "memory",
+    # Portuguese (PT)
+    "aprendizado de máquina": "machine learning",
+    "inteligência artificial": "artificial intelligence",
+    "rede neural": "neural network",
+    "redes neurais": "neural network",
+    "modelo de linguagem": "language model",
+    "grafo de conhecimento": "knowledge graph",
+    "memória": "memory",
+}# Enhanced spaCy label mapping with more types
 SPACY_LABEL_MAP = {
     "PERSON": "person",
     "ORG": "organization",
@@ -185,7 +226,6 @@ _NON_LATIN_RANGES = [
     (0x0E00, 0x0E7F),   # Thai
     (0x0400, 0x04FF),   # Cyrillic extended
 ]
-
 
 def detect_language(text: str) -> str:
     """
@@ -240,6 +280,43 @@ def normalize_entity(text: str) -> str:
     return text
 
 
+def normalize_query(text: str) -> str:
+    """
+    Normalize a search query string by applying synonym mapping to each token
+    and to the full query. Enables cross-lingual search: a query in Russian,
+    Spanish, German, French, or Portuguese maps to the English canonical form
+    which is used during ingestion.
+
+    Examples:
+        'машинное обучение' -> 'machine learning'
+        'inteligencia artificial' -> 'artificial intelligence'
+        'k8s deployment' -> 'kubernetes deployment'
+    """
+    lowered = text.lower().strip()
+    # Try full-phrase match first
+    if lowered in SYNONYMS:
+        return SYNONYMS[lowered]
+    # Try word-by-word replacement for multi-word queries
+    tokens = lowered.split()
+    result_tokens = []
+    i = 0
+    while i < len(tokens):
+        # Try longest match: 4-grams, 3-grams, 2-grams, then single token
+        matched = False
+        for n in (4, 3, 2):
+            if i + n <= len(tokens):
+                phrase = " ".join(tokens[i:i + n])
+                if phrase in SYNONYMS:
+                    result_tokens.append(SYNONYMS[phrase])
+                    i += n
+                    matched = True
+                    break
+        if not matched:
+            token = tokens[i]
+            result_tokens.append(SYNONYMS.get(token, token))
+            i += 1
+    return " ".join(result_tokens)
+
 def _get_spacy_model(lang: str):
     """
     Load and cache the appropriate spaCy model based on language.
@@ -283,7 +360,6 @@ def extract_entities_regex(text: str) -> List[Tuple[str, str, float]]:
             unique.append((entity_text, entity_type, confidence))
     return unique
 
-
 def extract_entities_spacy(text: str) -> List[Tuple[str, str, float]]:
     """
     Extract entities using spaCy NER with multilingual support.
@@ -294,43 +370,37 @@ def extract_entities_spacy(text: str) -> List[Tuple[str, str, float]]:
         lang = detect_language(text)
         nlp = _get_spacy_model(lang)
         doc = nlp(text)
-        
+
         entities = []
         text_lower = text.lower()
-        
+
         # First, add known entities (high confidence)
-        # Use word boundary matching for short keywords to avoid false positives
         import re
         for key, (name, etype) in KNOWN_ENTITIES.items():
             if len(key) <= 3:
-                # Short keywords: require word boundaries
                 if re.search(r'\b' + re.escape(key) + r'\b', text_lower):
                     if is_valid_entity(name):
                         entities.append((name, etype, 1.0))
             else:
                 if key in text_lower and is_valid_entity(name):
                     entities.append((name, etype, 1.0))
-        
+
         # Then, add spaCy detected entities
         for ent in doc.ents:
             if not is_valid_entity(ent.text):
                 continue
             normalized = normalize_entity(ent.text)
-            # Skip if already found in known entities
             if any(normalize_entity(e[0]) == normalized for e in entities):
                 continue
-            # Map spaCy label to our types
             entity_type = SPACY_LABEL_MAP.get(ent.label_, "concept")
-            # Skip NUMBER types - these are noise
             if entity_type == "number":
                 continue
-            # Skip measurement types - usually noise
             if entity_type == "measurement":
                 continue
             confidence = 0.8
             entities.append((ent.text, entity_type, confidence))
-        
-        # Deduplicate based on normalized text
+
+        # Deduplicate
         seen = set()
         unique = []
         for entity_text, entity_type, confidence in entities:
@@ -339,11 +409,10 @@ def extract_entities_spacy(text: str) -> List[Tuple[str, str, float]]:
                 seen.add(normalized)
                 unique.append((entity_text, entity_type, confidence))
         return unique
-        
+
     except Exception as e:
         print(f"⚠️  spaCy extraction failed: {e}, falling back to regex")
         return extract_entities_regex(text)
-
 
 def extract_entities(text: str, min_confidence: float = 0.5) -> List[Tuple[str, str]]:
     """
