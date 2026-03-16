@@ -480,7 +480,11 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 # VARIANT C: Temporal edge boost
                 if query_is_temporal and edge_type in ('TEMPORAL_BEFORE', 'TEMPORAL_AFTER'):
                     spread *= 1.5
-                
+
+                # CONTRADICTS edges: inhibitory signal (negative spread)
+                if edge_type == 'CONTRADICTS':
+                    spread = -abs(spread)
+
                 # Add to neighbor's activation
                 new_activations[neighbor_id] = new_activations.get(neighbor_id, 0) + spread
         

@@ -16,6 +16,7 @@ import sqlite3
 import numpy as np
 from datetime import datetime
 from typing import List, Tuple, Dict, Optional
+from database import create_edge
 
 
 # --- Contradiction signal patterns ---
@@ -350,6 +351,12 @@ def run_contradiction_detection(
             now
         ))
         stored += 1
+        # Create CONTRADICTS edges in graph (bidirectional, negative weight)
+        try:
+            create_edge(c['older_id'], c['newer_id'], weight=-c['severity'], edge_type='CONTRADICTS')
+            create_edge(c['newer_id'], c['older_id'], weight=-c['severity'], edge_type='CONTRADICTS')
+        except Exception as e:
+            print(f'  Warning: could not create CONTRADICTS edge: {e}')
 
     conn.commit()
     conn.close()
