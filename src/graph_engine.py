@@ -31,6 +31,9 @@ BLEND_ALPHA = float(os.getenv("BLEND_ALPHA", "0.6"))  # semantic weight
 BLEND_GAMMA = float(os.getenv("BLEND_GAMMA", "0.0"))  # BM25 weight (0=disabled, try 0.15)
 BLEND_DELTA = float(os.getenv("BLEND_DELTA", "0.0"))  # temporal weight (0=disabled, try 0.1)
 
+# Lateral inhibition: GABA-like suppression within communities (0=disabled, 0.3=mild, 0.7=strong)
+INHIBITION_STRENGTH = float(os.getenv("INHIBITION_STRENGTH", "0.3"))
+
 
 def cosine_similarity(a, b):
     """Calculate cosine similarity between two vectors"""
@@ -491,6 +494,8 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 for node_id in new_activations:
                     new_activations[node_id] /= max_activation
         
+
+        
         activations = new_activations
         
         # Debug output
@@ -661,6 +666,32 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 if blended[neighbor_id] > 0.3:  # Only suppress if contradicting note is active
                     blended[node_id] *= 0.5
                     break  # One active contradiction is enough
+
+    # Step 5c: Lateral inhibition via sub-communities (GABA analogy)
+    # Within each sub-community, winner keeps full score, others suppressed.
+    # Uses higher-resolution community detection for granular clusters.
+    # Increases result diversity and activation focus.
+    if INHIBITION_STRENGTH > 0 and blended:
+        try:
+            from graph_metrics import get_graph_metrics
+            _metrics = get_graph_metrics()
+            if _metrics.is_computed:
+                # Group scored nodes by community
+                _comm_groups = {}  # comm_id -> [(node_id, score)]
+                for _nid, _score in blended.items():
+                    _comm = _metrics.get_community(_nid)
+                    if _comm != -1:
+                        _comm_groups.setdefault(_comm, []).append((_nid, _score))
+                # Within each community: winner keeps score, others suppressed
+                for _comm_id, _members in _comm_groups.items():
+                    if len(_members) < 2:
+                        continue
+                    _winner_id = max(_members, key=lambda x: x[1])[0]
+                    for _nid, _score in _members:
+                        if _nid != _winner_id:
+                            blended[_nid] *= (1.0 - INHIBITION_STRENGTH)
+        except Exception:
+            pass  # Graceful: if metrics unavailable, skip inhibition
 
     # Step 6: PageRank boost (informational only, not applied to scoring)
     # Testing showed PAGERANK_BOOST > 0 causes P@5 regression

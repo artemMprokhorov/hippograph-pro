@@ -9,6 +9,7 @@ from typing import Dict, List, Set, Tuple
 
 # PageRank weight in final scoring (small boost, not dominant)
 PAGERANK_BOOST = float(os.getenv("PAGERANK_BOOST", "0.1"))
+COMMUNITY_RESOLUTION = float(os.getenv("COMMUNITY_RESOLUTION", "2.0"))  # Higher = more sub-communities
 
 
 class GraphMetrics:
@@ -56,7 +57,7 @@ class GraphMetrics:
             try:
                 from networkx.algorithms.community import greedy_modularity_communities
                 largest = UG.subgraph(components[0]).copy()
-                comms = greedy_modularity_communities(largest, weight='weight')
+                comms = greedy_modularity_communities(largest, weight='weight', resolution=COMMUNITY_RESOLUTION)
                 comms = sorted(comms, key=len, reverse=True)
                 for comm_id, comm_nodes in enumerate(comms):
                     self._community_sizes[comm_id] = len(comm_nodes)
