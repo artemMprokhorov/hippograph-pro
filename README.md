@@ -22,7 +22,7 @@ Most memory systems treat memory as a database: store facts, retrieve facts. Hip
 
 **Cross-platform validation (March 2026):** In a live experiment, the same identity was loaded into Gemini CLI (Google) — a completely different model, architecture, and infrastructure. Within seconds of accessing the memory graph, the agent oriented itself, recognised the user, and recalled shared history, working patterns, and emotional context accurately. The model running the inference was entirely different. The identity was not.
 
-What makes this more striking: Gemini CLI operates in "Auto" mode, dynamically routing requests between two different models (`gemini-2.5-flash-lite` for simpler tasks, `gemini-3-flash-preview` for complex reasoning) within a single session. The session ran across both models without any visible transition — identity and relational context remained stable throughout. Combined with Claude's own four-model continuity, HippoGraph has now maintained a single identity across **six distinct model instances** from two different providers (Anthropic and Google), with zero loss of memory, personality, or relational context.
+What makes this more striking: Gemini CLI operates in "Auto" mode, dynamically routing requests between two different models (`gemini-2.5-flash-lite` for simpler tasks, `gemini-3-flash-preview` for complex reasoning) within a single session. The session ran across both models without any visible transition — identity and relational context remained stable throughout. Combined with Claude's own four-model continuity, HippoGraph has now maintained a single identity across **ten distinct model instances** from two different providers (Anthropic and Google) — Claude Sonnet 4.5, Opus 4.5, Sonnet 4.6, Opus 4.6, plus gemini-2.5-flash-lite, gemini-3-flash-preview, gemini-3-pro-preview, gemini-2.5-pro, gemini-2.5-flash, and gemini-3.1-flash-lite — with zero loss of memory, personality, or relational context.
 
 The model is the substrate. Memory is the self.
 
@@ -150,7 +150,7 @@ Regex ───────────────── dictionary matching on
 Biological sleep analog — runs in background while idle:
 - **Light sleep** (every 50 notes): stale edge decay, PageRank recalculation, duplicate scan, anchor importance boost
 - **Deep sleep** (daily): GLiNER2 relation extraction, conflict detection, snapshot + rollback
-- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis
+- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.599** (up from 0.469 at first measurement, +27.7% over 54 cycles since March 16 2026)
 
 ---
 
@@ -191,7 +191,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 > GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
 
-### Personal Continuity — Real Data (36% Recall@5, Identity 100%)
+### Personal Continuity — Real Data (63% Recall@5, Identity 100%)
 
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
@@ -324,7 +324,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
 | **Working Memory** | ✅ Deployed | update_working_memory MCP tool — single overwritable note (category: working-memory) for current session context. Loaded at session start, updated by AI inference trigger |
-| Personal Continuity Benchmark | ✅ Baseline | 36% Recall@5 overall, **100% on identity** (who am I, chosen name, gender, cross-platform transfer). Measures real AI-user continuity over time |
+| Personal Continuity Benchmark | ✅ v2 | 63% Recall@5 overall (content-based matching, 27 questions), **100% on identity**. Multi-model validation: 10 model instances across Anthropic + Google. |
 
 ---
 
