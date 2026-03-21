@@ -150,7 +150,7 @@ Regex ───────────────── dictionary matching on
 Biological sleep analog — runs in background while idle:
 - **Light sleep** (every 50 notes): stale edge decay, PageRank recalculation, duplicate scan, anchor importance boost
 - **Deep sleep** (daily): GLiNER2 relation extraction, conflict detection, snapshot + rollback
-- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.629** (up from 0.469 at first measurement, +34.1% over ~60 cycles since March 16 2026). Convergence signal: 0.972 after 100k-edge consolidation.
+- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.586** (up from 0.469 at first measurement, +24.9% over ~70 cycles since March 16 2026). Bottleneck: convergence=0.019 (lateral inhibition needed).
 
 ---
 
