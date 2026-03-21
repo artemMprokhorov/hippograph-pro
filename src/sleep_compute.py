@@ -518,7 +518,7 @@ def get_protected_categories(db_path: str) -> set:
             FROM nodes
             WHERE importance = 'critical'
             GROUP BY category
-            HAVING cnt >= 3
+            HAVING cnt >= 1
             """
         ).fetchall()
         for cat, cnt in critical_cats:
