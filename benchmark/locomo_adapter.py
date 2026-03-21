@@ -257,9 +257,18 @@ def load_into_hippograph(conversations, api_url="http://localhost:5003", api_key
                         data=payload.encode(), headers=headers, method="POST"
                     )
                     try:
-                        with urllib.request.urlopen(req, timeout=30) as resp:
-                            json.loads(resp.read())
-                            total_loaded += 1
+                        for _attempt in range(3):
+                            try:
+                                with urllib.request.urlopen(req, timeout=30) as resp:
+                                    json.loads(resp.read())
+                                    total_loaded += 1
+                                    break
+                            except Exception as _e2:
+                                if _attempt < 2:
+                                    time.sleep(0.5 * (_attempt + 1))
+                                else:
+                                    raise _e2
+                        time.sleep(0.05)
                     except Exception as e:
                         errors.append(f"{note_key}: {e}")
         
@@ -295,9 +304,18 @@ def load_into_hippograph(conversations, api_url="http://localhost:5003", api_key
                         data=payload.encode(), headers=headers, method="POST"
                     )
                     try:
-                        with urllib.request.urlopen(req, timeout=30) as resp:
-                            json.loads(resp.read())
-                            total_loaded += 1
+                        for _attempt in range(3):
+                            try:
+                                with urllib.request.urlopen(req, timeout=30) as resp:
+                                    json.loads(resp.read())
+                                    total_loaded += 1
+                                    break
+                            except Exception as _e2:
+                                if _attempt < 2:
+                                    time.sleep(0.5 * (_attempt + 1))
+                                else:
+                                    raise _e2
+                        time.sleep(0.05)
                     except Exception as e:
                         errors.append(f"{note_key}: {e}")
         
