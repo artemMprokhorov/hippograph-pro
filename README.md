@@ -162,7 +162,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 **No automatic pruning.** This is an intentional architectural decision. Automatic cleanup optimizes for efficiency at the cost of unpredictable memory loss. If you want to prune weak edges, HippoGraph will show you exactly what would be removed and ask for explicit confirmation — never silently.
 
-**Protected memories don't fade.** Anchor categories (milestones, self-reflection, relational context, security events) are exempt from decay entirely. The memories that define identity and history stay prominent regardless of how long ago they were created.
+**Protected memories don't fade.** Anchor categories are exempt from decay entirely. Protection works in three layers: (1) hardcoded system baseline (milestones, protocols, security, breakthroughs), (2) user-defined policies via MCP, and (3) **auto-discovered** — any category with 3+ critical notes, or containing keywords like , , , , is automatically protected at every sleep cycle. New categories never fall through the cracks.
 
 ---
 
@@ -304,6 +304,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Temporal Decay | ✅ Deployed | Important memories persist, trivial ones fade |
 | Anchor Protection | ✅ Deployed | Critical memories exempt from decay |
 | User-Defined Anchor Policies | ✅ Deployed | Add/remove custom protected categories via MCP without code changes |
+| Auto-Discovered Anchor Categories | ✅ Deployed | New categories auto-protected based on critical note count or keyword match — learning infrastructure scales automatically |
 | Entity Resolution | ✅ Deployed | Case normalization on ingestion; merge_entities + list_entity_candidates MCP tools |
 | Sleep-Time Compute | ✅ Deployed | Background consolidation, relation extraction |
 | Contradiction Detection | ✅ Deployed | Finds conflicting memories; identity-aware mode |
