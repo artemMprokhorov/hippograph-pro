@@ -102,7 +102,10 @@ def get_tools_list():
                 "properties": {
                     "note_id": {"type": "integer"},
                     "content": {"type": "string"},
-                    "category": {"type": "string"}
+                    "category": {"type": "string"},
+                    "emotional_tone": {"type": "string"},
+                    "emotional_intensity": {"type": "integer", "default": 5, "minimum": 0, "maximum": 10},
+                    "emotional_reflection": {"type": "string"}
                 },
                 "required": ["note_id", "content"]
             }
@@ -308,7 +311,7 @@ def handle_tool_call(params):
             args.get("tags", None)
         )
     elif tool_name == "update_note":
-        return tool_update_note(args.get("note_id"), args.get("content"), args.get("category"))
+        return tool_update_note(args.get("note_id"), args.get("content"), args.get("category"), args.get("emotional_tone"), args.get("emotional_intensity"), args.get("emotional_reflection"))
     elif tool_name == "delete_note":
         return tool_delete_note(args.get("note_id"))
     elif tool_name == "neural_stats":
@@ -498,7 +501,7 @@ def tool_add_note(content: str, category: str, importance: str = "normal", force
     return {"content": [{"type": "text", "text": text}]}
 
 
-def tool_update_note(note_id: int, content: str, category: str = None):
+def tool_update_note(note_id: int, content: str, category: str = None, emotional_tone: str = None, emotional_intensity: int = None, emotional_reflection: str = None):
     """Update existing note"""
     if not note_id or not content:
         return {"error": {"code": -32602, "message": "Note ID and content required"}}
@@ -519,7 +522,12 @@ def tool_update_note(note_id: int, content: str, category: str = None):
         if len(embedding) != ann_idx.dimension:
             return {"error": {"code": -32603, "message": f"Embedding dim {len(embedding)} != index dim {ann_idx.dimension}"}}
 
-    db_update_node(note_id, content, category, embedding.tobytes())
+    final_tone = emotional_tone if emotional_tone is not None else existing.get("emotional_tone")
+    final_intensity = emotional_intensity if emotional_intensity is not None else existing.get("emotional_intensity", 5)
+    final_reflection = emotional_reflection if emotional_reflection is not None else existing.get("emotional_reflection")
+    db_update_node(note_id, content, category, embedding.tobytes(),
+                   emotional_tone=final_tone, emotional_intensity=final_intensity,
+                   emotional_reflection=final_reflection)
 
     # Update ANN index with new vector
     ann_idx.add_vector(note_id, embedding)
