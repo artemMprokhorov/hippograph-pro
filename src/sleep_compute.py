@@ -473,6 +473,12 @@ def step_orphan_cleanup(db_path, dry_run=False):
     return {"orphans": len(orphans), "details": [(o[0], o[1]) for o in orphans]}
 
 # Hardcoded categories always protected from stale edge decay.
+# Keywords that auto-protect any category containing them (item #39)
+AUTO_PROTECT_KEYWORDS = {
+    "learned", "identity", "protocol", "security", "consciousness",
+    "critical-lesson", "self", "anchor"
+}
+
 # These cannot be removed by user policies - they are the system baseline.
 HARDCODED_PROTECTED_CATEGORIES = {
     "anchor", "self-reflection", "relational-context",
@@ -481,27 +487,70 @@ HARDCODED_PROTECTED_CATEGORIES = {
 
 
 def get_protected_categories(db_path: str) -> set:
-    """Get effective protected categories: hardcoded + user-defined anchor policies.
-    
-    Hardcoded categories are always included regardless of user policies.
-    User can ADD more categories via add_anchor_policy MCP tool.
-    User can REMOVE only their own user-defined policies (not hardcoded).
+    """Get effective protected categories: hardcoded + user-defined + auto-discovered.
+
+    Three layers:
+    1. HARDCODED_PROTECTED_CATEGORIES - system baseline, cannot be removed
+    2. User-defined anchor policies (add_anchor_policy MCP tool)
+    3. Auto-discovered: categories with >=3 critical notes OR keyword match
+
+    This ensures new categories like 'learned-skill', 'consciousness-research'
+    are automatically protected without manual intervention.
     """
     categories = set(HARDCODED_PROTECTED_CATEGORIES)
+    auto_discovered = set()
+
     try:
         import sqlite3
         conn = sqlite3.connect(db_path)
+
+        # Layer 2: user-defined anchor policies
         rows = conn.execute(
             "SELECT category FROM anchor_policies WHERE policy_type = 'protect'"
         ).fetchall()
-        conn.close()
         user_cats = {r[0] for r in rows}
-        if user_cats:
-            print(f"  Anchor policies: {len(HARDCODED_PROTECTED_CATEGORIES)} hardcoded "
-                  f"+ {len(user_cats)} user-defined = {len(categories | user_cats)} total")
         categories |= user_cats
+
+        # Layer 3a: categories with >=3 critical notes -> auto-protect
+        critical_cats = conn.execute(
+            """
+            SELECT category, COUNT(*) as cnt
+            FROM nodes
+            WHERE importance = 'critical'
+            GROUP BY category
+            HAVING cnt >= 3
+            """
+        ).fetchall()
+        for cat, cnt in critical_cats:
+            if cat and cat not in categories:
+                auto_discovered.add(cat)
+
+        # Layer 3b: keyword match in category name -> auto-protect
+        all_cats = conn.execute(
+            "SELECT DISTINCT category FROM nodes WHERE category IS NOT NULL"
+        ).fetchall()
+        for (cat,) in all_cats:
+            if not cat or cat in categories:
+                continue
+            for kw in AUTO_PROTECT_KEYWORDS:
+                if kw in cat.lower():
+                    auto_discovered.add(cat)
+                    break
+
+        conn.close()
+
+        categories |= auto_discovered
+
+        print(f"  Anchor policies: {len(HARDCODED_PROTECTED_CATEGORIES)} hardcoded"
+              f" + {len(user_cats)} user-defined"
+              f" + {len(auto_discovered)} auto-discovered"
+              f" = {len(categories)} total")
+        if auto_discovered:
+            print(f"  Auto-protected categories: {sorted(auto_discovered)}")
+
     except Exception as e:
-        print(f"  Warning: could not load user anchor policies: {e}")
+        print(f"  Warning: could not load anchor policies: {e}")
+
     return categories
 
 
