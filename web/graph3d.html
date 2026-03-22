@@ -226,7 +226,16 @@ button:hover { background: #252540; }
         document.getElementById('tooltip').style.display = 'none';
       });
 
+    // Faster zoom - default is way too slow for large graph
+    if (graph.controls) {
+      var controls = graph.controls();
+      if (controls) {
+        controls.zoomSpeed = 5.0;
+        controls.rotateSpeed = 0.8;
+      }
+    }
     graph.d3Force('charge').strength(-60);
+    graph.onEngineStop(function() { graph.zoomToFit(600, 50); });
     graph.d3Force('link').distance(function(l) {
       if (l.type === 'consolidation') return 20;
       if (l.type === 'semantic') return 50;
