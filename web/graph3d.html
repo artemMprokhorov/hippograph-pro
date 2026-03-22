@@ -75,6 +75,7 @@ button:hover { background: #252540; }
     <input type="range" min="0" max="1" step="0.02" value="0.12" id="linkOpRange">
     <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
       <button id="btnLabels">Labels off</button>
+      <button id="btnWeights">Weights off</button>
       <button id="btnFit">Fit</button>
       <button id="btnReset">Reset</button>
     </div>
@@ -106,7 +107,7 @@ button:hover { background: #252540; }
   }
 
   var allNodes = [], allLinks = [], graph = null;
-  var showLabels = false, nodeSize = 4, linkOpacity = 0.12;
+  var showLabels = false, nodeSize = 4, linkOpacity = 0.12, showWeights = false;
   var highlightNodes = new Set();
 
   function setLoading(msg) {
@@ -204,7 +205,7 @@ button:hover { background: #252540; }
       .nodeOpacity(0.9)
       .linkSource('source').linkTarget('target')
       .linkOpacity(linkOpacity)
-      .linkWidth(function(l) { return l.weight * 0.6; })
+      .linkWidth(function(l) { return showWeights ? Math.max(0.3, l.weight * 4) : 0.5; })
       .linkColor(linkColor)
       .onNodeClick(onNodeClick)
       .onNodeHover(onNodeHover)
@@ -313,6 +314,13 @@ button:hover { background: #252540; }
       showLabels = !showLabels;
       this.textContent = showLabels ? 'Labels on' : 'Labels off';
       graph && graph.nodeLabel(function(n) { return showLabels ? ('#' + n.id + ' [' + n.category + ']') : ''; });
+    });
+    document.getElementById('btnWeights').addEventListener('click', function() {
+      showWeights = !showWeights;
+      this.textContent = showWeights ? 'Weights on' : 'Weights off';
+      this.style.background = showWeights ? '#5ecba1' : '';
+      this.style.color = showWeights ? '#0a0a0f' : '';
+      graph && graph.linkWidth(function(l) { return showWeights ? Math.max(0.3, l.weight * 4) : 0.5; });
     });
     document.getElementById('btnFit').addEventListener('click', function() { graph && graph.zoomToFit(400); });
     document.getElementById('btnReset').addEventListener('click', function() {
