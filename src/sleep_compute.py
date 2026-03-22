@@ -995,6 +995,7 @@ def step_emergence_check(db_path, dry_run=False):
     SELF_REF_CATEGORIES = {
         'self-reflection', 'self-identity', 'self-awareness',
         'consciousness-research', 'breakthrough', 'origin',
+        'learned-skill',  # organic mastery = self-referential knowledge
     }
     SELF_QUERIES = [
         "what do you know about your own memory",
