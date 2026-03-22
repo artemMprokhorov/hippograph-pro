@@ -325,7 +325,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **EMOTIONAL_RESONANCE Edges** | ✅ Deployed | Amygdala analog: notes sharing 2+ emotional tone tags form affective links (Jaccard, multilingual: RU/ES/DE/FR/PT tags normalized to EN, 1031 edges) |
 | **GENERALIZES / INSTANTIATES Edges** | ✅ Deployed | Prefrontal cortex analog: critical-lessons GENERALIZES protocols (cosine >=0.65, 70 edges; debug/session-summary excluded as too generic) |
 | **Lateral Inhibition** | ✅ Deployed | GABA analog: sub-community detection (resolution=2.0, ~100 clusters) + post-blend winner-takes-most suppression. Increases result diversity (3.2→4.8 unique clusters in top-5) |
-| **SUPERSEDES Edge Type** | ✅ Deployed | Temporal state mutation: newer notes suppress outdated facts (x0.3 penalty). 449 pairs in LOCOMO. item #42 |
+| **SUPERSEDES Edge Type** | ✅ Deployed | Temporal state mutation edges via `step_supersedes_scan()` (threshold=0.85, 449 pairs). Penalty removed after tuning — edges reserved for LNN Temporal Reasoner (item #44). |
 | **Emergence Detection** | ✅ Deployed | Three-signal metric: convergence (focus), phi_proxy (integration), self-referential P@5 (self-model). Logged each sleep cycle to track graph maturation |
 | **Temporal Filtering (dateparser)** | ✅ Deployed | Natural language time queries: "last week", "на прошлой неделе", "yesterday" auto-convert to time filters |
 | **Synonym Normalization** | ✅ Deployed | Abbreviation + cross-lingual expansion: 50+ pairs EN/RU/ES/DE/FR/PT; search-time `normalize_query()` maps any language to canonical EN form |

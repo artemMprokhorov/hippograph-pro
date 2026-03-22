@@ -239,34 +239,40 @@ BLEND_GAMMA=0.15
 *HippoGraph Pro — self-hosted, zero-LLM-cost, graph-based associative memory. [github.com/artemMprokhorov/hippograph-pro](https://github.com/artemMprokhorov/hippograph-pro)*
 ---
 
-## March 22, 2026 — SUPERSEDES Edge Type Experiment (item #42)
+## March 22, 2026 — SUPERSEDES Edge Type — Full Tuning (item #42)
 
 ### Setup
 
 | Parameter | Value |
 |-----------|-------|
-| Experiment | SUPERSEDES temporal state mutation |
 | Dataset | LOCOMO-10, 1540 queries, turn-level |
-| New feature | `step_supersedes_scan()` + penalty x0.3 in spreading activation |
-| SUPERSEDES edges created | 449 (threshold=0.85, entity overlap >= 1) |
+| New feature | `step_supersedes_scan()` + penalty in spreading activation |
+| Containers | Isolated benchmark DB (no production notes) |
 
-### Three-Run Comparison
+### Four-Run Tuning Results
 
-| Category | Production (Mar 20) | Clean Baseline | Clean + SUPERSEDES | SUPERSEDES Effect |
-|----------|---------------------|----------------|-------------------|-------------------|
-| **Overall** | **47.9%** | **52.6%** | **51.6%** | **-1.0pp** |
-| Multi-hop | 54.5% | 62.0% | 60.1% | -1.9pp |
-| Temporal | 24.0% | 30.2% | 29.2% | -1.0pp |
-| Single-hop | 42.6% | 42.6% | 42.6% | 0.0pp |
-| Open-domain | 49.8% | 54.9% | 53.9% | -1.0pp |
+| Configuration | Overall | Multi-hop | Temporal | Single-hop | Open-domain |
+|---------------|---------|-----------|----------|------------|-------------|
+| **Baseline (no SUPERSEDES)** | **52.6%** | **62.0%** | **30.2%** | **42.6%** | **54.9%** |
+| threshold=0.85, penalty=0.3 (449 edges) | 51.6% | 60.1% | 29.2% | 42.6% | 53.9% |
+| threshold=0.85, penalty=0.5 (449 edges) | 51.4% | 59.8% | 29.2% | 42.6% | 53.6% |
+| threshold=0.90, penalty=0.3 (74 edges) | 51.6% | 61.1% | 28.1% | 42.6% | 53.7% |
 
 ### Analysis
 
-**Key finding:** +4.7pp improvement is from clean isolation (no production notes in benchmark DB),
-not from SUPERSEDES edges themselves. The SUPERSEDES penalty (x0.3) is slightly aggressive (-1pp).
+**Key finding:** Applying SUPERSEDES as a spreading activation penalty consistently hurts retrieval
+across all parameter combinations. The penalty suppresses older notes that provide essential
+reasoning context — especially for multi-hop queries that need historical facts.
 
-**What works:** `step_supersedes_scan()` correctly identifies 449 temporal superseding pairs
-in LOCOMO data (576K pairs checked). Algorithm is sound.
+**What works:** `step_supersedes_scan()` correctly identifies temporal superseding pairs
+(449 at threshold=0.85, 74 at threshold=0.90). The algorithm is sound.
 
-**Next:** Tune penalty (0.5 vs 0.3) and threshold (0.90 vs 0.85) to convert isolation
-gain into real SUPERSEDES improvement.
+**What doesn't work:** Penalty in spreading activation. Old notes about the same topic
+are not noise — they provide reasoning context. Suppressing them loses information.
+
+**Decision:**
+- `step_supersedes_scan()` ✔️ kept: creates structural edges
+- Spreading activation penalty ❌ removed
+- SUPERSEDES edges reserved for item #44 (LNN Temporal Reasoner) as input features
+
+**Baseline gain (+4.7pp over production)** is from clean isolation, not SUPERSEDES.
