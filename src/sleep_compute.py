@@ -735,6 +735,134 @@ def restore_snapshot(snapshot_path, db_path):
 
 
 
+
+
+def step_supersedes_scan(db_path, dry_run=False):
+    """Step 5d: Detect and create SUPERSEDES edges between temporally ordered similar notes.
+
+    Algorithm:
+    - Find pairs of notes with cosine similarity >= THRESHOLD
+    - If note B was created AFTER note A and they share >= 1 entity
+    - Then B supersedes A: create SUPERSEDES(B -> A) edge
+    - Mark A as low importance (unless critical)
+    - Penalty applied in graph_engine spreading_activation (x0.3)
+
+    Biological analogy: newer memories with same content inhibit older ones.
+    Fixes temporal retrieval gap (LOCOMO temporal category: 24% Recall@5).
+    """
+    print("\n=== Step 5d: SUPERSEDES Scan (item #42) ===")
+    import numpy as np
+
+    conn = sqlite3.connect(db_path)
+
+    # Load embeddings + metadata
+    rows = conn.execute(
+        "SELECT id, embedding, timestamp, importance FROM nodes WHERE embedding IS NOT NULL"
+    ).fetchall()
+
+    # Load entity links: node_id -> set of entity_ids
+    entity_rows = conn.execute(
+        "SELECT source_id, target_id FROM edges WHERE edge_type = 'entity'"
+    ).fetchall()
+    node_entities = {}
+    for src, tgt in entity_rows:
+        node_entities.setdefault(src, set()).add(tgt)
+        node_entities.setdefault(tgt, set()).add(src)
+
+    conn.close()
+
+    # Build embeddings dict
+    embeddings = {}
+    timestamps = {}
+    importances = {}
+    for nid, blob, ts, imp in rows:
+        if blob:
+            embeddings[nid] = np.frombuffer(blob, dtype=np.float32)
+            timestamps[nid] = ts or ''
+            importances[nid] = imp or 'normal'
+
+    SIMILARITY_THRESHOLD = 0.85
+    WINDOW = 100  # sliding window for efficiency
+
+    ids = list(embeddings.keys())
+    supersedes_pairs = []  # (newer_id, older_id, similarity)
+    checked = 0
+
+    for i in range(len(ids)):
+        for j in range(i + 1, min(i + WINDOW, len(ids))):
+            id_a, id_b = ids[i], ids[j]
+            e1, e2 = embeddings[id_a], embeddings[id_b]
+            norm1, norm2 = np.linalg.norm(e1), np.linalg.norm(e2)
+            if norm1 == 0 or norm2 == 0:
+                continue
+            sim = float(np.dot(e1, e2) / (norm1 * norm2))
+            checked += 1
+
+            if sim < SIMILARITY_THRESHOLD:
+                continue
+
+            # Determine which is newer
+            ts_a, ts_b = timestamps[id_a], timestamps[id_b]
+            if not ts_a or not ts_b or ts_a == ts_b:
+                continue
+
+            newer_id, older_id = (id_b, id_a) if ts_b > ts_a else (id_a, id_b)
+
+            # Must share at least 1 entity
+            ents_newer = node_entities.get(newer_id, set())
+            ents_older = node_entities.get(older_id, set())
+            if not ents_newer.intersection(ents_older):
+                continue
+
+            # Don't supersede critical notes
+            if importances[older_id] == 'critical':
+                continue
+
+            supersedes_pairs.append((newer_id, older_id, sim))
+
+    print(f"  Checked {checked} pairs, found {len(supersedes_pairs)} SUPERSEDES candidates")
+
+    if not supersedes_pairs:
+        return {"checked": checked, "created": 0, "pairs": []}
+
+    if dry_run:
+        for newer, older, sim in supersedes_pairs[:5]:
+            print(f"  [DRY] #{newer} SUPERSEDES #{older} (sim={sim:.3f})")
+        return {"checked": checked, "created": 0, "pairs": supersedes_pairs[:20]}
+
+    # Create edges and mark older notes as low importance
+    conn = sqlite3.connect(db_path)
+    created = 0
+    for newer_id, older_id, sim in supersedes_pairs:
+        # Check if edge already exists
+        existing = conn.execute(
+            "SELECT id FROM edges WHERE source_id=? AND target_id=? AND edge_type='SUPERSEDES'",
+            (newer_id, older_id)
+        ).fetchone()
+        if existing:
+            continue
+
+        # Create SUPERSEDES edge
+        conn.execute(
+            """INSERT OR IGNORE INTO edges
+               (source_id, target_id, edge_type, weight, created_at)
+               VALUES (?, ?, 'SUPERSEDES', ?, datetime('now'))""",
+            (newer_id, older_id, float(sim))
+        )
+        # Mark older note as low importance
+        conn.execute(
+            "UPDATE nodes SET importance='low' WHERE id=? AND importance='normal'",
+            (older_id,)
+        )
+        created += 1
+        if created <= 3:
+            print(f"  #{newer_id} SUPERSEDES #{older_id} (sim={sim:.3f})")
+
+    conn.commit()
+    conn.close()
+    print(f"  Created {created} SUPERSEDES edges")
+    return {"checked": checked, "created": created, "pairs": supersedes_pairs[:20]}
+
 def step_generalizes_instantiates(db_path, dry_run=False):
     """
     Create GENERALIZES / INSTANTIATES edges between concrete experiences and abstract rules.
@@ -1182,6 +1310,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in duplicate scan: {e}")
         results['duplicates'] = {"error": str(e)}
+
+    try:
+        results['supersedes'] = step_supersedes_scan(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in supersedes scan: {e}")
+        results['supersedes'] = {"error": str(e)}
 
     # Update last_sleep_at timestamp
     if not dry_run:

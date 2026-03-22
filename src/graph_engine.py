@@ -669,6 +669,18 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                     blended[node_id] *= 0.5
                     break  # One active contradiction is enough
 
+    # Step 5b': SUPERSEDES penalty (item #42)
+    # If note A is superseded by a newer note B, suppress A's score.
+    # Biological analogy: newer memories inhibit older ones about the same topic.
+    # Penalty: x0.3 - significant suppression but note stays findable as history.
+    for node_id in list(blended.keys()):
+        for neighbor_id, _, edge_type in graph_cache.get_neighbors(node_id):
+            if edge_type == 'SUPERSEDES':
+                # neighbor_id supersedes node_id -> suppress node_id
+                if blended.get(neighbor_id, 0) > 0.1:
+                    blended[node_id] *= 0.3
+                    break
+
     # Step 5c: Lateral inhibition via sub-communities (GABA analogy)
     # Within each sub-community, winner keeps full score, others suppressed.
     # Uses higher-resolution community detection for granular clusters.
