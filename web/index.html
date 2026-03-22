@@ -217,6 +217,7 @@
             <div class="panel-body">
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
                     <button class="primary" onclick="loadFullGraph()">Load Full Graph</button>
+                    <button onclick="open3D()" title="Open 3D Viewer" style="background:#7c9ff5;color:#0a0a0f;border:1px solid #7c9ff5;font-weight:600;">3D</button>
                     <button onclick="refreshData()" style="background: #4a9eff; color: white; border: 1px solid #6bb3ff;">🔄</button>
                 </div>
                 <div class="control-group" style="border-top: 1px solid #333; padding-top: 12px;">
@@ -566,6 +567,11 @@
         }
 
         async function refreshData() { await loadFullGraph(); }
+        function open3D() {
+            var url = window.location.protocol + '//' + window.location.hostname + ':5002/graph3d.html?api_key=' + encodeURIComponent(API_KEY);
+            window.open(url, '_blank');
+        }
+
 
         // === Node Detail ===
         async function fetchNodeDetail(nodeId) {

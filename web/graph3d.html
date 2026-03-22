@@ -1,0 +1,257 @@
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/3d-force-graph@1.70.10/dist/3d-force-graph.min.js"></script>
+<script>
+const API_BASE = window.location.protocol + '//' + window.location.hostname + ':5001';
+const API_KEY = new URLSearchParams(window.location.search).get('api_key') || localStorage.getItem('hg_api_key') || '';
+if (API_KEY) localStorage.setItem('hg_api_key', API_KEY);
+
+function escapeHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const COLORS = [
+  '#7c9ff5','#5ecba1','#f5a97f','#e879a0','#a78bfa',
+  '#fbbf24','#34d399','#f87171','#60a5fa','#c084fc',
+  '#fb923c','#4ade80','#f472b6','#38bdf8','#a3e635'
+];
+const catColorMap = {};
+function getColor(cat) {
+  if (!catColorMap[cat]) {
+    const keys = Object.keys(catColorMap);
+    catColorMap[cat] = COLORS[keys.length % COLORS.length];
+  }
+  return catColorMap[cat];
+}
+
+let allNodes = [], allLinks = [], graph = null;
+let showLabels = false, nodeSize = 4, linkOpacity = 0.15;
+let highlightNodes = new Set(), selectedNode = null;
+
+async function loadData() {
+  document.getElementById('loadingText').textContent = 'Fetching graph data...';
+  const url = API_BASE + '/api/graph-data?api_key=' + encodeURIComponent(API_KEY) + '&brief=true';
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status + ' from API');
+  const data = await res.json();
+
+  allNodes = data.nodes.map(n => ({
+    id: String(n.id),
+    category: n.category || 'general',
+    community: n.community,
+    pagerank: n.pagerank || 0,
+    importance: n.importance || 'normal',
+    emotional_tone: n.emotional_tone || '',
+    emotional_intensity: n.emotional_intensity || 0,
+    preview: n.preview || '',
+    timestamp: n.timestamp || '',
+    color: getColor(n.category || 'general'),
+    val: 1 + (n.pagerank || 0) * 8
+  }));
+
+  // Sample links to avoid browser crash - max 8000
+  const PRIORITY = ['consolidation','semantic','GENERALIZES','INSTANTIATES','EMOTIONAL_RESONANCE'];
+  let links = data.edges || [];
+  const prioritized = links.filter(e => PRIORITY.includes(e.type));
+  const rest = links.filter(e => !PRIORITY.includes(e.type));
+  const sampled = [...prioritized, ...rest].slice(0, 8000);
+
+  allLinks = sampled.map(e => ({
+    source: String(e.source),
+    target: String(e.target),
+    type: e.type || 'entity',
+    weight: e.weight || 0.5
+  }));
+
+  document.getElementById('statsDiv').innerHTML =
+    '<div class="stat"><strong>Nodes:</strong> ' + allNodes.length + '</div>' +
+    '<div class="stat"><strong>Total edges:</strong> ' + (data.edges||[]).length.toLocaleString() + '</div>' +
+    '<div class="stat"><strong>Showing:</strong> ' + allLinks.length + ' edges</div>' +
+    '<div class="stat"><strong>Communities:</strong> ' + (data.stats && data.stats.communities ? data.stats.communities : '?') + '</div>';
+
+  return { nodes: allNodes, links: allLinks };
+}
+
+function buildLegend() {
+  const cats = Object.entries(catColorMap)
+    .map(([name, color]) => ({ name, color, count: allNodes.filter(n => n.category === name).length }))
+    .sort((a,b) => b.count - a.count)
+    .slice(0, 15);
+  const el = document.getElementById('legend');
+  el.innerHTML = '';
+  cats.forEach(c => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.innerHTML = '<div class="legend-dot" style="background:' + c.color + '"></div><span>' + escapeHtml(c.name) + ' (' + c.count + ')</span>';
+    item.onclick = () => { document.getElementById('catFilter').value = c.name; applyFilter(); };
+    el.appendChild(item);
+  });
+  // populate cat filter
+  const sel = document.getElementById('catFilter');
+  cats.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.name; opt.textContent = c.name + ' (' + c.count + ')';
+    sel.appendChild(opt);
+  });
+}
+
+function buildGraph(graphData) {
+  graph = ForceGraph3D()(document.getElementById('container'))
+    .backgroundColor('#0a0a0f')
+    .graphData(graphData)
+    .nodeId('id')
+    .nodeColor(n => highlightNodes.size > 0 ? (highlightNodes.has(n.id) ? n.color : '#222233') : n.color)
+    .nodeVal(n => nodeSize * (n.val || 1))
+    .nodeLabel(n => showLabels ? '#' + n.id + ' [' + n.category + ']' : '')
+    .nodeOpacity(0.9)
+    .linkSource('source')
+    .linkTarget('target')
+    .linkOpacity(linkOpacity)
+    .linkWidth(l => l.weight * 0.8)
+    .linkColor(l => {
+      if (l.type === 'semantic') return '#7c9ff5';
+      if (l.type === 'consolidation') return '#5ecba1';
+      if (l.type === 'EMOTIONAL_RESONANCE') return '#e879a0';
+      if (l.type === 'GENERALIZES') return '#fbbf24';
+      if (l.type === 'INSTANTIATES') return '#a78bfa';
+      return '#334';
+    })
+    .onNodeClick(onNodeClick)
+    .onNodeHover(onNodeHover)
+    .onBackgroundClick(() => { highlightNodes.clear(); selectedNode = null; graph.nodeColor(n => n.color); hideTooltip(); })
+    .d3Force('charge', null)
+    .d3AlphaDecay(0.02)
+    .d3VelocityDecay(0.3);
+
+  graph.d3Force('charge', graph.d3Force('charge'));
+
+  // Weaker repulsion for better cluster separation
+  graph.d3Force('charge').strength(-80);
+  graph.d3Force('link').distance(l => {
+    if (l.type === 'consolidation') return 20;
+    if (l.type === 'semantic') return 40;
+    return 80;
+  });
+}
+
+function onNodeHover(node, prevNode) {
+  const tip = document.getElementById('tooltip');
+  if (!node) { tip.style.display = 'none'; return; }
+  tip.style.display = 'block';
+  tip.innerHTML = '<strong>#' + escapeHtml(node.id) + '</strong> [' + escapeHtml(node.category) + ']<br>' +
+    (node.preview ? escapeHtml(node.preview.substring(0,100)) : '');
+}
+
+document.addEventListener('mousemove', e => {
+  const tip = document.getElementById('tooltip');
+  if (tip.style.display === 'block') {
+    tip.style.left = (e.clientX + 14) + 'px';
+    tip.style.top = (e.clientY - 10) + 'px';
+  }
+});
+
+function onNodeClick(node) {
+  selectedNode = node;
+  highlightNodes.clear();
+  highlightNodes.add(node.id);
+  graph.nodeColor(n => highlightNodes.has(n.id) ? n.color : '#1a1a2e');
+  // Fly to node
+  const dist = 80;
+  const pos = node;
+  graph.cameraPosition(
+    { x: pos.x + dist, y: pos.y + dist/2, z: pos.z + dist },
+    pos, 800
+  );
+  showNodeDetail(node);
+}
+
+async function showNodeDetail(node) {
+  const el = document.getElementById('nodeDetail');
+  el.style.display = 'block';
+  el.innerHTML = '<div class="nd-title">#' + escapeHtml(node.id) + '</div>' +
+    '<div class="nd-meta">' + escapeHtml(node.category) +
+    (node.importance !== 'normal' ? ' &bull; ' + escapeHtml(node.importance) : '') +
+    (node.emotional_intensity > 0 ? ' &bull; &#128150; ' + node.emotional_intensity + '/10' : '') + '</div>' +
+    '<div class="nd-content">' + escapeHtml(node.preview) + '</div>' +
+    '<div style="color:#555;font-size:10px;margin-top:6px;">Loading full content...</div>';
+  try {
+    const r = await fetch(API_BASE + '/api/node/' + node.id + '?api_key=' + encodeURIComponent(API_KEY));
+    if (r.ok) {
+      const d = await r.json();
+      el.innerHTML = '<div class="nd-title">#' + escapeHtml(node.id) + '</div>' +
+        '<div class="nd-meta">' + escapeHtml(node.category) +
+        (d.importance && d.importance !== 'normal' ? ' &bull; ' + escapeHtml(d.importance) : '') +
+        (d.emotional_intensity > 0 ? ' &bull; &#128150; ' + d.emotional_intensity + '/10' : '') +
+        (d.emotional_tone ? '<br><span style="color:#e879a0">' + escapeHtml(d.emotional_tone) + '</span>' : '') +
+        '</div><div class="nd-content">' + escapeHtml(d.content || '') + '</div>';
+    }
+  } catch(e) {}
+}
+
+function handleSearch(q) {
+  q = q.trim().toLowerCase();
+  if (!q) { highlightNodes.clear(); graph && graph.nodeColor(n => n.color); return; }
+  highlightNodes.clear();
+  allNodes.forEach(n => {
+    if (n.preview.toLowerCase().includes(q) || n.category.toLowerCase().includes(q) || n.id === q)
+      highlightNodes.add(n.id);
+  });
+  graph && graph.nodeColor(n => highlightNodes.has(n.id) ? n.color : '#1a1a2e');
+}
+
+function applyFilter() {
+  const cat = document.getElementById('catFilter').value;
+  const edge = document.getElementById('edgeFilter').value;
+  const nodes = cat ? allNodes.filter(n => n.category === cat) : allNodes;
+  const nodeIds = new Set(nodes.map(n => n.id));
+  const links = allLinks.filter(l => {
+    const srcOk = nodeIds.has(String(l.source.id || l.source));
+    const tgtOk = nodeIds.has(String(l.target.id || l.target));
+    const typeOk = !edge || l.type === edge;
+    return srcOk && tgtOk && typeOk;
+  });
+  graph && graph.graphData({ nodes, links });
+}
+
+function updateNodeSize(v) {
+  nodeSize = parseFloat(v);
+  document.getElementById('nodeSzVal').textContent = v;
+  graph && graph.nodeVal(n => nodeSize * (n.val || 1));
+}
+
+function updateLinkOpacity(v) {
+  linkOpacity = parseFloat(v);
+  document.getElementById('linkOpVal').textContent = v;
+  graph && graph.linkOpacity(linkOpacity);
+}
+
+function toggleLabels() {
+  showLabels = !showLabels;
+  graph && graph.nodeLabel(n => showLabels ? '#' + n.id + ' [' + n.category + ']' : '');
+}
+
+function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+
+function resetCamera() {
+  graph && graph.cameraPosition({ x: 0, y: 0, z: 400 }, { x:0, y:0, z:0 }, 800);
+}
+
+// INIT
+(async () => {
+  try {
+    if (!API_KEY) {
+      document.getElementById('loadingText').textContent =
+        'Add ?api_key=YOUR_KEY to the URL';
+      return;
+    }
+    const graphData = await loadData();
+    document.getElementById('loading').style.display = 'none';
+    buildLegend();
+    buildGraph(graphData);
+  } catch(err) {
+    document.getElementById('loadingText').textContent = 'Error: ' + err.message;
+  }
+})();
+</script>
+</body>
+</html>
