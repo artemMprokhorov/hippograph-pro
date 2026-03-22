@@ -220,7 +220,23 @@ button:hover { background: #252540; }
       .nodeId('id')
       .nodeColor(function(n) { return highlightNodes.size > 0 ? (highlightNodes.has(n.id) ? n.color : '#111122') : n.color; })
       .nodeVal(function(n) { return nodeSize * (n.val || 1); })
-      .nodeLabel(function(n) { return showLabels ? ('#' + n.id + ' [' + n.category + ']') : ''; })
+      .nodeLabel(function(n) { return ''; })
+      .nodeThreeObject(function(n) {
+        if (!showLabels) return null;
+        var sprite = new THREE.Sprite(new THREE.SpriteMaterial({ color: n.color }));
+        var canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 32;
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = n.color;
+        ctx.font = '14px sans-serif';
+        ctx.fillText('#' + n.id, 2, 22);
+        var tex = new THREE.CanvasTexture(canvas);
+        var mat = new THREE.SpriteMaterial({ map: tex });
+        var sp = new THREE.Sprite(mat);
+        sp.scale.set(12, 3, 1);
+        return sp;
+      })
+      .nodeThreeObjectExtend(true)
       .nodeOpacity(0.9)
       .linkSource('source').linkTarget('target')
       .linkOpacity(function(l) { if (highlightLinks.size === 0) return linkOpacity; var sid=String(l.source&&l.source.id!==undefined?l.source.id:l.source),tid=String(l.target&&l.target.id!==undefined?l.target.id:l.target); return (highlightLinks.has(sid+''-''+tid)||highlightLinks.has(tid+''-''+sid)) ? Math.min(1, linkOpacity*6) : 0.03; })
@@ -235,6 +251,8 @@ button:hover { background: #252540; }
         graph.linkColor(linkColor);
         graph.linkOpacity(linkOpacity);
         document.getElementById('tooltip').style.display = 'none';
+        var nd = document.getElementById('nodeDetail');
+        if (nd) { nd.style.display = 'none'; nd.innerHTML = '<div style="color:#555;font-size:11px;">Click a node to inspect</div>'; }
       });
 
     // Faster zoom - default is way too slow for large graph
@@ -300,22 +318,34 @@ button:hover { background: #252540; }
   async function showNodeDetail(node) {
     var el = document.getElementById('nodeDetail');
     if (!el) return;
-    el.innerHTML = '<div class="nd-title">#' + esc(node.id) + '</div>' +
-      '<div class="nd-meta">' + esc(node.category) +
-      (node.importance !== 'normal' ? ' &bull; ' + esc(node.importance) : '') +
-      (node.emotional_intensity > 0 ? ' &bull; &#128150;' + node.emotional_intensity + '/10' : '') + '</div>' +
-      '<div class="nd-content">' + esc(node.preview) + '</div>' +
-      '<div style="color:#444;font-size:10px;margin-top:4px;">Loading full content...</div>';
+    el.style.display = 'block';
+    // Show meta immediately from graph data
+    var tags = node.tags ? '<div class="nd-tags">' + esc(node.tags) + '</div>' : '';
+    el.innerHTML =
+      '<div class="nd-title">#' + esc(node.id) + '</div>' +
+      '<div class="nd-meta">' +
+        '<span style="color:#7c9ff5;">' + esc(node.category) + '</span>' +
+        (node.importance && node.importance !== 'normal' ? ' &bull; <span style="color:#fbbf24;">★ ' + esc(node.importance) + '</span>' : '') +
+        (node.emotional_intensity > 0 ? ' &bull; &#128150; ' + node.emotional_intensity + '/10' : '') +
+      '</div>' +
+      '<div style="color:#aaa;font-size:11px;line-height:1.5;margin-top:6px;">' + esc(node.preview || '') + '</div>';
+    // Fetch tags and emotional_tone from API
     try {
       var r = await fetch(API_BASE + '/api/node/' + node.id + '?api_key=' + encodeURIComponent(API_KEY));
       if (r.ok) {
         var d = await r.json();
-        el.innerHTML = '<div class="nd-title">#' + esc(node.id) + '</div>' +
-          '<div class="nd-meta">' + esc(node.category) +
-          (d.importance && d.importance !== 'normal' ? ' &bull; ' + esc(d.importance) : '') +
-          (d.emotional_intensity > 0 ? ' &bull; &#128150;' + d.emotional_intensity + '/10' : '') +
-          (d.emotional_tone ? '<br><span style="color:#e879a0">' + esc(d.emotional_tone) + '</span>' : '') + '</div>' +
-          '<div class="nd-content">' + esc(d.content || '') + '</div>';
+        var tagsHtml = d.tags ? '<div style="margin-top:6px;"><span style="color:#555;font-size:10px;">tags: </span><span style="color:#888;font-size:10px;">' + esc(d.tags) + '</span></div>' : '';
+        var toneHtml = d.emotional_tone ? '<div style="color:#e879a0;font-size:10px;margin-top:4px;">&#128150; ' + esc(d.emotional_tone) + '</div>' : '';
+        var tsHtml = d.timestamp ? '<div style="color:#444;font-size:10px;margin-top:4px;">' + esc(d.timestamp.substring(0,10)) + '</div>' : '';
+        el.innerHTML =
+          '<div class="nd-title">#' + esc(node.id) + '</div>' +
+          '<div class="nd-meta">' +
+            '<span style="color:#7c9ff5;">' + esc(d.category || node.category) + '</span>' +
+            (d.importance && d.importance !== 'normal' ? ' &bull; <span style="color:#fbbf24;">★ ' + esc(d.importance) + '</span>' : '') +
+            (d.emotional_intensity > 0 ? ' &bull; &#128150; ' + d.emotional_intensity + '/10' : '') +
+          '</div>' +
+          toneHtml + tagsHtml + tsHtml +
+          '<div style="color:#aaa;font-size:11px;line-height:1.5;margin-top:6px;border-top:1px solid #1a1a2e;padding-top:6px;">' + esc(node.preview || '') + '</div>';
       }
     } catch(e) {}
   }
@@ -362,7 +392,9 @@ button:hover { background: #252540; }
     document.getElementById('btnLabels').addEventListener('click', function() {
       showLabels = !showLabels;
       this.textContent = showLabels ? 'Labels on' : 'Labels off';
-      graph && graph.nodeLabel(function(n) { return showLabels ? ('#' + n.id + ' [' + n.category + ']') : ''; });
+      this.style.background = showLabels ? '#7c9ff5' : '';
+      this.style.color = showLabels ? '#0a0a0f' : '';
+      if (graph) graph.nodeThreeObject(graph.nodeThreeObject());
     });
     document.getElementById('minWeightRange').addEventListener('input', function() {
       minWeight = parseFloat(this.value);
