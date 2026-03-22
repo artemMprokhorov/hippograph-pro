@@ -1,256 +1,337 @@
-<script src="/three.min.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HippoGraph 3D</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; color: #e0e0e0; font-family: -apple-system, sans-serif; overflow: hidden; }
+#container { position: fixed; top: 0; left: 260px; right: 0; bottom: 0; }
+#ui {
+  position: fixed; top: 0; left: 0; width: 260px; height: 100vh;
+  background: rgba(10,10,20,0.95); border-right: 1px solid #1a1a2e;
+  padding: 16px; overflow-y: auto; z-index: 10;
+  display: flex; flex-direction: column; gap: 12px;
+}
+h1 { font-size: 15px; font-weight: 600; color: #7c9ff5; }
+h3 { font-size: 11px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+.section { border-top: 1px solid #1a1a2e; padding-top: 10px; }
+input[type=text], select {
+  width: 100%; padding: 7px 10px; background: #111122; border: 1px solid #2a2a3e;
+  border-radius: 6px; color: #e0e0e0; font-size: 12px; outline: none;
+}
+input[type=range] { width: 100%; accent-color: #7c9ff5; cursor: pointer; }
+.stat { font-size: 11px; color: #aaa; line-height: 1.8; }
+.stat strong { color: #e0e0e0; }
+#nodeDetail {
+  background: #0d0d1a; border: 1px solid #2a2a3e; border-radius: 8px;
+  padding: 10px; font-size: 11px; line-height: 1.6; max-height: 260px; overflow-y: auto;
+}
+.nd-title { font-size: 13px; font-weight: 600; color: #7c9ff5; margin-bottom: 4px; }
+.nd-meta { color: #888; margin-bottom: 6px; font-size: 10px; }
+.nd-content { color: #ccc; white-space: pre-wrap; word-break: break-word; }
+.ctrl-row { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #aaa; }
+button { padding: 6px 12px; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 6px; color: #e0e0e0; font-size: 11px; cursor: pointer; }
+button:hover { background: #252540; }
+#loading { position: fixed; inset: 0; background: #0a0a0f; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 100; gap: 16px; }
+#loadingText { font-size: 14px; color: #888; }
+.spinner { width: 40px; height: 40px; border: 3px solid #1a1a2e; border-top-color: #7c9ff5; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#tooltip { position: fixed; pointer-events: none; background: rgba(10,10,20,0.95); border: 1px solid #2a2a3e; border-radius: 6px; padding: 6px 10px; font-size: 11px; color: #e0e0e0; z-index: 20; display: none; max-width: 220px; line-height: 1.5; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #aaa; cursor: pointer; margin-bottom: 3px; }
+.legend-item:hover { color: #e0e0e0; }
+.legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+</style>
+</head>
+<body>
+
+<div id="loading"><div class="spinner"></div><div id="loadingText">Loading graph...</div></div>
+<div id="tooltip"></div>
+
+<div id="ui">
+  <h1>&#129504; HippoGraph 3D</h1>
+  <input type="text" id="search" placeholder="Search nodes...">
+  <div class="section">
+    <h3>Filter</h3>
+    <select id="catFilter"><option value="">All categories</option></select>
+    <div style="margin-top:8px;">
+      <select id="edgeFilter">
+        <option value="">All edge types</option>
+        <option value="semantic">Semantic</option>
+        <option value="consolidation">Consolidation</option>
+        <option value="EMOTIONAL_RESONANCE">Emotional resonance</option>
+        <option value="GENERALIZES">Generalizes</option>
+        <option value="INSTANTIATES">Instantiates</option>
+        <option value="entity">Entity</option>
+      </select>
+    </div>
+  </div>
+  <div class="section">
+    <h3>Display</h3>
+    <div class="ctrl-row" style="margin-bottom:4px;"><span>Node size</span><span id="nodeSzVal">4</span></div>
+    <input type="range" min="1" max="12" value="4" id="nodeSzRange">
+    <div class="ctrl-row" style="margin-top:8px;margin-bottom:4px;"><span>Link opacity</span><span id="linkOpVal">0.12</span></div>
+    <input type="range" min="0" max="1" step="0.02" value="0.12" id="linkOpRange">
+    <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+      <button id="btnLabels">Labels off</button>
+      <button id="btnFit">Fit</button>
+      <button id="btnReset">Reset</button>
+    </div>
+  </div>
+  <div class="section"><h3>Stats</h3><div id="statsDiv" class="stat">Loading...</div></div>
+  <div class="section"><h3>Legend</h3><div id="legend"></div></div>
+  <div class="section"><h3>Node</h3><div id="nodeDetail"><div style="color:#555;font-size:11px;">Click a node to inspect</div></div></div>
+</div>
+
+<div id="container"></div>
+
 <script src="/3d-force-graph.min.js"></script>
 <script>
-const API_BASE = window.location.protocol + '//' + window.location.hostname + ':5001';
-const API_KEY = new URLSearchParams(window.location.search).get('api_key') || localStorage.getItem('hg_api_key') || '';
-if (API_KEY) localStorage.setItem('hg_api_key', API_KEY);
+(function() {
+  var API_BASE = window.location.protocol + '//' + window.location.hostname + ':5001';
+  var API_KEY = new URLSearchParams(window.location.search).get('api_key') || localStorage.getItem('hg_api_key') || '';
+  if (API_KEY) localStorage.setItem('hg_api_key', API_KEY);
 
-function escapeHtml(s) {
-  if (!s) return '';
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-
-const COLORS = [
-  '#7c9ff5','#5ecba1','#f5a97f','#e879a0','#a78bfa',
-  '#fbbf24','#34d399','#f87171','#60a5fa','#c084fc',
-  '#fb923c','#4ade80','#f472b6','#38bdf8','#a3e635'
-];
-const catColorMap = {};
-function getColor(cat) {
-  if (!catColorMap[cat]) {
-    const keys = Object.keys(catColorMap);
-    catColorMap[cat] = COLORS[keys.length % COLORS.length];
+  function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-  return catColorMap[cat];
-}
 
-let allNodes = [], allLinks = [], graph = null;
-let showLabels = false, nodeSize = 4, linkOpacity = 0.15;
-let highlightNodes = new Set(), selectedNode = null;
-
-async function loadData() {
-  document.getElementById('loadingText').textContent = 'Fetching graph data...';
-  const url = API_BASE + '/api/graph-data?api_key=' + encodeURIComponent(API_KEY) + '&brief=true';
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('HTTP ' + res.status + ' from API');
-  const data = await res.json();
-
-  allNodes = data.nodes.map(n => ({
-    id: String(n.id),
-    category: n.category || 'general',
-    community: n.community,
-    pagerank: n.pagerank || 0,
-    importance: n.importance || 'normal',
-    emotional_tone: n.emotional_tone || '',
-    emotional_intensity: n.emotional_intensity || 0,
-    preview: n.preview || '',
-    timestamp: n.timestamp || '',
-    color: getColor(n.category || 'general'),
-    val: 1 + (n.pagerank || 0) * 8
-  }));
-
-  // Sample links to avoid browser crash - max 8000
-  const PRIORITY = ['consolidation','semantic','GENERALIZES','INSTANTIATES','EMOTIONAL_RESONANCE'];
-  let links = data.edges || [];
-  const prioritized = links.filter(e => PRIORITY.includes(e.type));
-  const rest = links.filter(e => !PRIORITY.includes(e.type));
-  const sampled = [...prioritized, ...rest].slice(0, 8000);
-
-  allLinks = sampled.map(e => ({
-    source: String(e.source),
-    target: String(e.target),
-    type: e.type || 'entity',
-    weight: e.weight || 0.5
-  }));
-
-  document.getElementById('statsDiv').innerHTML =
-    '<div class="stat"><strong>Nodes:</strong> ' + allNodes.length + '</div>' +
-    '<div class="stat"><strong>Total edges:</strong> ' + (data.edges||[]).length.toLocaleString() + '</div>' +
-    '<div class="stat"><strong>Showing:</strong> ' + allLinks.length + ' edges</div>' +
-    '<div class="stat"><strong>Communities:</strong> ' + (data.stats && data.stats.communities ? data.stats.communities : '?') + '</div>';
-
-  return { nodes: allNodes, links: allLinks };
-}
-
-function buildLegend() {
-  const cats = Object.entries(catColorMap)
-    .map(([name, color]) => ({ name, color, count: allNodes.filter(n => n.category === name).length }))
-    .sort((a,b) => b.count - a.count)
-    .slice(0, 15);
-  const el = document.getElementById('legend');
-  el.innerHTML = '';
-  cats.forEach(c => {
-    const item = document.createElement('div');
-    item.className = 'legend-item';
-    item.innerHTML = '<div class="legend-dot" style="background:' + c.color + '"></div><span>' + escapeHtml(c.name) + ' (' + c.count + ')</span>';
-    item.onclick = () => { document.getElementById('catFilter').value = c.name; applyFilter(); };
-    el.appendChild(item);
-  });
-  // populate cat filter
-  const sel = document.getElementById('catFilter');
-  cats.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.name; opt.textContent = c.name + ' (' + c.count + ')';
-    sel.appendChild(opt);
-  });
-}
-
-function buildGraph(graphData) {
-  graph = ForceGraph3D()(document.getElementById('container'))
-    .backgroundColor('#0a0a0f')
-    .graphData(graphData)
-    .nodeId('id')
-    .nodeColor(n => highlightNodes.size > 0 ? (highlightNodes.has(n.id) ? n.color : '#222233') : n.color)
-    .nodeVal(n => nodeSize * (n.val || 1))
-    .nodeLabel(n => showLabels ? '#' + n.id + ' [' + n.category + ']' : '')
-    .nodeOpacity(0.9)
-    .linkSource('source')
-    .linkTarget('target')
-    .linkOpacity(linkOpacity)
-    .linkWidth(l => l.weight * 0.8)
-    .linkColor(l => {
-      if (l.type === 'semantic') return '#7c9ff5';
-      if (l.type === 'consolidation') return '#5ecba1';
-      if (l.type === 'EMOTIONAL_RESONANCE') return '#e879a0';
-      if (l.type === 'GENERALIZES') return '#fbbf24';
-      if (l.type === 'INSTANTIATES') return '#a78bfa';
-      return '#334';
-    })
-    .onNodeClick(onNodeClick)
-    .onNodeHover(onNodeHover)
-    .onBackgroundClick(() => { highlightNodes.clear(); selectedNode = null; graph.nodeColor(n => n.color); hideTooltip(); })
-    .d3Force('charge', null)
-    .d3AlphaDecay(0.02)
-    .d3VelocityDecay(0.3);
-
-  graph.d3Force('charge', graph.d3Force('charge'));
-
-  // Weaker repulsion for better cluster separation
-  graph.d3Force('charge').strength(-80);
-  graph.d3Force('link').distance(l => {
-    if (l.type === 'consolidation') return 20;
-    if (l.type === 'semantic') return 40;
-    return 80;
-  });
-}
-
-function onNodeHover(node, prevNode) {
-  const tip = document.getElementById('tooltip');
-  if (!node) { tip.style.display = 'none'; return; }
-  tip.style.display = 'block';
-  tip.innerHTML = '<strong>#' + escapeHtml(node.id) + '</strong> [' + escapeHtml(node.category) + ']<br>' +
-    (node.preview ? escapeHtml(node.preview.substring(0,100)) : '');
-}
-
-document.addEventListener('mousemove', e => {
-  const tip = document.getElementById('tooltip');
-  if (tip.style.display === 'block') {
-    tip.style.left = (e.clientX + 14) + 'px';
-    tip.style.top = (e.clientY - 10) + 'px';
+  var COLORS = ['#7c9ff5','#5ecba1','#f5a97f','#e879a0','#a78bfa','#fbbf24','#34d399','#f87171','#60a5fa','#c084fc','#fb923c','#4ade80','#f472b6','#38bdf8','#a3e635'];
+  var catColorMap = {};
+  function getColor(cat) {
+    if (!catColorMap[cat]) catColorMap[cat] = COLORS[Object.keys(catColorMap).length % COLORS.length];
+    return catColorMap[cat];
   }
-});
 
-function onNodeClick(node) {
-  selectedNode = node;
-  highlightNodes.clear();
-  highlightNodes.add(node.id);
-  graph.nodeColor(n => highlightNodes.has(n.id) ? n.color : '#1a1a2e');
-  // Fly to node
-  const dist = 80;
-  const pos = node;
-  graph.cameraPosition(
-    { x: pos.x + dist, y: pos.y + dist/2, z: pos.z + dist },
-    pos, 800
-  );
-  showNodeDetail(node);
-}
+  var allNodes = [], allLinks = [], graph = null;
+  var showLabels = false, nodeSize = 4, linkOpacity = 0.12;
+  var highlightNodes = new Set();
 
-async function showNodeDetail(node) {
-  const el = document.getElementById('nodeDetail');
-  el.style.display = 'block';
-  el.innerHTML = '<div class="nd-title">#' + escapeHtml(node.id) + '</div>' +
-    '<div class="nd-meta">' + escapeHtml(node.category) +
-    (node.importance !== 'normal' ? ' &bull; ' + escapeHtml(node.importance) : '') +
-    (node.emotional_intensity > 0 ? ' &bull; &#128150; ' + node.emotional_intensity + '/10' : '') + '</div>' +
-    '<div class="nd-content">' + escapeHtml(node.preview) + '</div>' +
-    '<div style="color:#555;font-size:10px;margin-top:6px;">Loading full content...</div>';
-  try {
-    const r = await fetch(API_BASE + '/api/node/' + node.id + '?api_key=' + encodeURIComponent(API_KEY));
-    if (r.ok) {
-      const d = await r.json();
-      el.innerHTML = '<div class="nd-title">#' + escapeHtml(node.id) + '</div>' +
-        '<div class="nd-meta">' + escapeHtml(node.category) +
-        (d.importance && d.importance !== 'normal' ? ' &bull; ' + escapeHtml(d.importance) : '') +
-        (d.emotional_intensity > 0 ? ' &bull; &#128150; ' + d.emotional_intensity + '/10' : '') +
-        (d.emotional_tone ? '<br><span style="color:#e879a0">' + escapeHtml(d.emotional_tone) + '</span>' : '') +
-        '</div><div class="nd-content">' + escapeHtml(d.content || '') + '</div>';
+  function setLoading(msg) {
+    var el = document.getElementById('loadingText');
+    if (el) el.textContent = msg;
+  }
+
+  function hideLoading() {
+    var el = document.getElementById('loading');
+    if (el) el.style.display = 'none';
+  }
+
+  async function loadData() {
+    setLoading('Fetching graph data...');
+    var url = API_BASE + '/api/graph-data?api_key=' + encodeURIComponent(API_KEY) + '&brief=true';
+    var res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    var data = await res.json();
+
+    allNodes = data.nodes.map(function(n) {
+      return {
+        id: String(n.id),
+        category: n.category || 'general',
+        community: n.community,
+        pagerank: n.pagerank || 0,
+        importance: n.importance || 'normal',
+        emotional_tone: n.emotional_tone || '',
+        emotional_intensity: n.emotional_intensity || 0,
+        preview: n.preview || '',
+        timestamp: n.timestamp || '',
+        color: getColor(n.category || 'general'),
+        val: 1 + (n.pagerank || 0) * 6
+      };
+    });
+
+    var PRIORITY = ['consolidation','semantic','GENERALIZES','INSTANTIATES','EMOTIONAL_RESONANCE'];
+    var all = data.edges || [];
+    var pri = all.filter(function(e) { return PRIORITY.indexOf(e.type) >= 0; });
+    var rest = all.filter(function(e) { return PRIORITY.indexOf(e.type) < 0; });
+    var sampled = pri.concat(rest).slice(0, 6000);
+
+    allLinks = sampled.map(function(e) {
+      return { source: String(e.source), target: String(e.target), type: e.type || 'entity', weight: e.weight || 0.5 };
+    });
+
+    var statsEl = document.getElementById('statsDiv');
+    if (statsEl) statsEl.innerHTML =
+      '<div class="stat"><strong>Nodes:</strong> ' + allNodes.length + '</div>' +
+      '<div class="stat"><strong>Total edges:</strong> ' + all.length.toLocaleString() + '</div>' +
+      '<div class="stat"><strong>Showing:</strong> ' + allLinks.length + ' edges</div>';
+
+    return { nodes: allNodes, links: allLinks };
+  }
+
+  function buildLegend() {
+    var cats = Object.entries(catColorMap)
+      .map(function(e) { return { name: e[0], color: e[1], count: allNodes.filter(function(n) { return n.category === e[0]; }).length }; })
+      .sort(function(a,b) { return b.count - a.count; }).slice(0, 15);
+    var el = document.getElementById('legend');
+    if (!el) return;
+    el.innerHTML = '';
+    var sel = document.getElementById('catFilter');
+    cats.forEach(function(c) {
+      var item = document.createElement('div');
+      item.className = 'legend-item';
+      item.innerHTML = '<div class="legend-dot" style="background:' + c.color + '"></div><span>' + esc(c.name) + ' (' + c.count + ')</span>';
+      item.onclick = function() { if(sel) sel.value = c.name; applyFilter(); };
+      el.appendChild(item);
+      if (sel) {
+        var opt = document.createElement('option');
+        opt.value = c.name; opt.textContent = c.name + ' (' + c.count + ')';
+        sel.appendChild(opt);
+      }
+    });
+  }
+
+  function linkColor(l) {
+    var t = l.type;
+    if (t === 'semantic') return '#7c9ff5';
+    if (t === 'consolidation') return '#5ecba1';
+    if (t === 'EMOTIONAL_RESONANCE') return '#e879a0';
+    if (t === 'GENERALIZES') return '#fbbf24';
+    if (t === 'INSTANTIATES') return '#a78bfa';
+    return '#1a1a2e';
+  }
+
+  function buildGraph(gd) {
+    graph = ForceGraph3D()(document.getElementById('container'))
+      .backgroundColor('#0a0a0f')
+      .graphData(gd)
+      .nodeId('id')
+      .nodeColor(function(n) { return highlightNodes.size > 0 ? (highlightNodes.has(n.id) ? n.color : '#111122') : n.color; })
+      .nodeVal(function(n) { return nodeSize * (n.val || 1); })
+      .nodeLabel(function(n) { return showLabels ? ('#' + n.id + ' [' + n.category + ']') : ''; })
+      .nodeOpacity(0.9)
+      .linkSource('source').linkTarget('target')
+      .linkOpacity(linkOpacity)
+      .linkWidth(function(l) { return l.weight * 0.6; })
+      .linkColor(linkColor)
+      .onNodeClick(onNodeClick)
+      .onNodeHover(onNodeHover)
+      .onBackgroundClick(function() {
+        highlightNodes.clear();
+        graph.nodeColor(function(n) { return n.color; });
+        document.getElementById('tooltip').style.display = 'none';
+      });
+
+    graph.d3Force('charge').strength(-60);
+    graph.d3Force('link').distance(function(l) {
+      if (l.type === 'consolidation') return 20;
+      if (l.type === 'semantic') return 50;
+      return 100;
+    });
+  }
+
+  function onNodeHover(node) {
+    var tip = document.getElementById('tooltip');
+    if (!tip) return;
+    if (!node) { tip.style.display = 'none'; return; }
+    tip.style.display = 'block';
+    tip.innerHTML = '<strong>#' + esc(node.id) + '</strong> [' + esc(node.category) + ']<br>' + esc((node.preview || '').substring(0, 80));
+  }
+
+  document.addEventListener('mousemove', function(e) {
+    var tip = document.getElementById('tooltip');
+    if (tip && tip.style.display === 'block') {
+      tip.style.left = (e.clientX + 14) + 'px';
+      tip.style.top = (e.clientY - 10) + 'px';
     }
-  } catch(e) {}
-}
-
-function handleSearch(q) {
-  q = q.trim().toLowerCase();
-  if (!q) { highlightNodes.clear(); graph && graph.nodeColor(n => n.color); return; }
-  highlightNodes.clear();
-  allNodes.forEach(n => {
-    if (n.preview.toLowerCase().includes(q) || n.category.toLowerCase().includes(q) || n.id === q)
-      highlightNodes.add(n.id);
   });
-  graph && graph.nodeColor(n => highlightNodes.has(n.id) ? n.color : '#1a1a2e');
-}
 
-function applyFilter() {
-  const cat = document.getElementById('catFilter').value;
-  const edge = document.getElementById('edgeFilter').value;
-  const nodes = cat ? allNodes.filter(n => n.category === cat) : allNodes;
-  const nodeIds = new Set(nodes.map(n => n.id));
-  const links = allLinks.filter(l => {
-    const srcOk = nodeIds.has(String(l.source.id || l.source));
-    const tgtOk = nodeIds.has(String(l.target.id || l.target));
-    const typeOk = !edge || l.type === edge;
-    return srcOk && tgtOk && typeOk;
-  });
-  graph && graph.graphData({ nodes, links });
-}
+  function onNodeClick(node) {
+    highlightNodes.clear();
+    highlightNodes.add(node.id);
+    graph.nodeColor(function(n) { return highlightNodes.has(n.id) ? n.color : '#111122'; });
+    var d = 80;
+    graph.cameraPosition({ x: node.x + d, y: node.y + d/2, z: node.z + d }, node, 800);
+    showNodeDetail(node);
+  }
 
-function updateNodeSize(v) {
-  nodeSize = parseFloat(v);
-  document.getElementById('nodeSzVal').textContent = v;
-  graph && graph.nodeVal(n => nodeSize * (n.val || 1));
-}
+  async function showNodeDetail(node) {
+    var el = document.getElementById('nodeDetail');
+    if (!el) return;
+    el.innerHTML = '<div class="nd-title">#' + esc(node.id) + '</div>' +
+      '<div class="nd-meta">' + esc(node.category) +
+      (node.importance !== 'normal' ? ' &bull; ' + esc(node.importance) : '') +
+      (node.emotional_intensity > 0 ? ' &bull; &#128150;' + node.emotional_intensity + '/10' : '') + '</div>' +
+      '<div class="nd-content">' + esc(node.preview) + '</div>' +
+      '<div style="color:#444;font-size:10px;margin-top:4px;">Loading full content...</div>';
+    try {
+      var r = await fetch(API_BASE + '/api/node/' + node.id + '?api_key=' + encodeURIComponent(API_KEY));
+      if (r.ok) {
+        var d = await r.json();
+        el.innerHTML = '<div class="nd-title">#' + esc(node.id) + '</div>' +
+          '<div class="nd-meta">' + esc(node.category) +
+          (d.importance && d.importance !== 'normal' ? ' &bull; ' + esc(d.importance) : '') +
+          (d.emotional_intensity > 0 ? ' &bull; &#128150;' + d.emotional_intensity + '/10' : '') +
+          (d.emotional_tone ? '<br><span style="color:#e879a0">' + esc(d.emotional_tone) + '</span>' : '') + '</div>' +
+          '<div class="nd-content">' + esc(d.content || '') + '</div>';
+      }
+    } catch(e) {}
+  }
 
-function updateLinkOpacity(v) {
-  linkOpacity = parseFloat(v);
-  document.getElementById('linkOpVal').textContent = v;
-  graph && graph.linkOpacity(linkOpacity);
-}
+  function handleSearch() {
+    var q = (document.getElementById('search').value || '').trim().toLowerCase();
+    if (!q) { highlightNodes.clear(); graph && graph.nodeColor(function(n) { return n.color; }); return; }
+    highlightNodes.clear();
+    allNodes.forEach(function(n) {
+      if ((n.preview||'').toLowerCase().indexOf(q) >= 0 || n.category.toLowerCase().indexOf(q) >= 0 || n.id === q)
+        highlightNodes.add(n.id);
+    });
+    graph && graph.nodeColor(function(n) { return highlightNodes.has(n.id) ? n.color : '#111122'; });
+  }
 
-function toggleLabels() {
-  showLabels = !showLabels;
-  graph && graph.nodeLabel(n => showLabels ? '#' + n.id + ' [' + n.category + ']' : '');
-}
+  function applyFilter() {
+    var cat = document.getElementById('catFilter').value;
+    var edge = document.getElementById('edgeFilter').value;
+    var nodes = cat ? allNodes.filter(function(n) { return n.category === cat; }) : allNodes;
+    var nodeIds = new Set(nodes.map(function(n) { return n.id; }));
+    var links = allLinks.filter(function(l) {
+      var s = String(l.source.id !== undefined ? l.source.id : l.source);
+      var t = String(l.target.id !== undefined ? l.target.id : l.target);
+      return nodeIds.has(s) && nodeIds.has(t) && (!edge || l.type === edge);
+    });
+    graph && graph.graphData({ nodes: nodes, links: links });
+  }
 
-function hideTooltip() { document.getElementById('tooltip').style.display = 'none'; }
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('search').addEventListener('input', handleSearch);
+    document.getElementById('catFilter').addEventListener('change', applyFilter);
+    document.getElementById('edgeFilter').addEventListener('change', applyFilter);
 
-function resetCamera() {
-  graph && graph.cameraPosition({ x: 0, y: 0, z: 400 }, { x:0, y:0, z:0 }, 800);
-}
+    document.getElementById('nodeSzRange').addEventListener('input', function() {
+      nodeSize = parseFloat(this.value);
+      document.getElementById('nodeSzVal').textContent = this.value;
+      graph && graph.nodeVal(function(n) { return nodeSize * (n.val||1); });
+    });
+    document.getElementById('linkOpRange').addEventListener('input', function() {
+      linkOpacity = parseFloat(this.value);
+      document.getElementById('linkOpVal').textContent = this.value;
+      graph && graph.linkOpacity(linkOpacity);
+    });
+    document.getElementById('btnLabels').addEventListener('click', function() {
+      showLabels = !showLabels;
+      this.textContent = showLabels ? 'Labels on' : 'Labels off';
+      graph && graph.nodeLabel(function(n) { return showLabels ? ('#' + n.id + ' [' + n.category + ']') : ''; });
+    });
+    document.getElementById('btnFit').addEventListener('click', function() { graph && graph.zoomToFit(400); });
+    document.getElementById('btnReset').addEventListener('click', function() {
+      graph && graph.cameraPosition({x:0,y:0,z:400},{x:0,y:0,z:0},800);
+    });
 
-// INIT
-(async () => {
-  try {
     if (!API_KEY) {
-      document.getElementById('loadingText').textContent =
-        'Add ?api_key=YOUR_KEY to the URL';
+      document.getElementById('loadingText').textContent = 'Add ?api_key=YOUR_KEY to URL';
       return;
     }
-    const graphData = await loadData();
-    document.getElementById('loading').style.display = 'none';
-    buildLegend();
-    buildGraph(graphData);
-  } catch(err) {
-    document.getElementById('loadingText').textContent = 'Error: ' + err.message;
-  }
+
+    loadData().then(function(gd) {
+      hideLoading();
+      buildLegend();
+      buildGraph(gd);
+    }).catch(function(err) {
+      document.getElementById('loadingText').textContent = 'Error: ' + err.message;
+    });
+  });
 })();
 </script>
 </body>
