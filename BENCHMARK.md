@@ -237,3 +237,36 @@ BLEND_GAMMA=0.15
 ---
 
 *HippoGraph Pro — self-hosted, zero-LLM-cost, graph-based associative memory. [github.com/artemMprokhorov/hippograph-pro](https://github.com/artemMprokhorov/hippograph-pro)*
+---
+
+## March 22, 2026 — SUPERSEDES Edge Type Experiment (item #42)
+
+### Setup
+
+| Parameter | Value |
+|-----------|-------|
+| Experiment | SUPERSEDES temporal state mutation |
+| Dataset | LOCOMO-10, 1540 queries, turn-level |
+| New feature | `step_supersedes_scan()` + penalty x0.3 in spreading activation |
+| SUPERSEDES edges created | 449 (threshold=0.85, entity overlap >= 1) |
+
+### Three-Run Comparison
+
+| Category | Production (Mar 20) | Clean Baseline | Clean + SUPERSEDES | SUPERSEDES Effect |
+|----------|---------------------|----------------|-------------------|-------------------|
+| **Overall** | **47.9%** | **52.6%** | **51.6%** | **-1.0pp** |
+| Multi-hop | 54.5% | 62.0% | 60.1% | -1.9pp |
+| Temporal | 24.0% | 30.2% | 29.2% | -1.0pp |
+| Single-hop | 42.6% | 42.6% | 42.6% | 0.0pp |
+| Open-domain | 49.8% | 54.9% | 53.9% | -1.0pp |
+
+### Analysis
+
+**Key finding:** +4.7pp improvement is from clean isolation (no production notes in benchmark DB),
+not from SUPERSEDES edges themselves. The SUPERSEDES penalty (x0.3) is slightly aggressive (-1pp).
+
+**What works:** `step_supersedes_scan()` correctly identifies 449 temporal superseding pairs
+in LOCOMO data (576K pairs checked). Algorithm is sound.
+
+**Next:** Tune penalty (0.5 vs 0.3) and threshold (0.90 vs 0.85) to convert isolation
+gain into real SUPERSEDES improvement.
