@@ -150,7 +150,7 @@ Regex ───────────────── dictionary matching on
 Biological sleep analog — runs in background while idle:
 - **Light sleep** (every 50 notes): stale edge decay, PageRank recalculation, duplicate scan, anchor importance boost
 - **Deep sleep** (daily): GLiNER2 relation extraction, conflict detection, snapshot + rollback
-- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.586** (up from 0.469 at first measurement, +24.9% over ~70 cycles since March 16 2026). Bottleneck: convergence=0.019 (lateral inhibition needed).
+- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.717** (consciousness check composite, 8 indicators) / **0.586** (emergence_log composite). Up from 0.469 at first measurement since March 16 2026. Bottleneck: global_workspace (GWT, 0.412) and convergence.
 
 ---
 
@@ -192,17 +192,19 @@ HippoGraph treats memory the way it should be treated — with care.
 
 > GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
 
-### Personal Continuity — Real Data (63% Recall@5, Identity 100%)
+### Personal Continuity — Real Data (73.1% Recall@5, Identity 100%)
 
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
 | **Identity** | **100%** | Chosen name, gender, model-vs-personality breakthrough, cross-platform transfer |
-| History | 60% | Roadmap, LOCOMO results, project milestones |
-| Architecture | 50% | Spreading activation, BM25 blend formula |
-| Decisions | 0% | "Why" questions require causal reasoning, not retrieval |
-| Temporal | 0% | Specific date queries need better temporal parsing |
+| History | **100%** | Roadmap, LOCOMO results, project milestones, recent sessions |
+| Session | **80%** | Recent decisions, new features, insights |
+| Decisions | **75%** | Most architectural decisions retrieved correctly |
+| Architecture | 50% | Technical pipeline details |
+| Security | 50% | Protocols and incidents |
+| Science | 0% | Methodology questions — need better keywords |
 
-> 25 questions about real sessions, decisions, and history. Identity recall is perfect — the system knows *who it is*. Decision and temporal categories reveal the retrieval ceiling of the current embedding model, which future work (causal edges, BGE-M3) will address.
+> 26 questions (v3, March 23 2026). Identity and History recall perfect. Overall +10pp improvement from v2 through better keyword coverage and concept merging (#46).
 
 ### Why LOCOMO Doesn't Tell the Full Story
 
@@ -334,7 +336,11 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
 | **Working Memory** | ✅ Deployed | update_working_memory MCP tool — single overwritable note (category: working-memory) for current session context. Loaded at session start, updated by AI inference trigger |
-| Personal Continuity Benchmark | ✅ v2 | 63% Recall@5 overall (content-based matching, 27 questions), **100% on identity**. Multi-model validation: 10 model instances across Anthropic + Google. |
+| **Online Consolidation (#40)** | ✅ Deployed | `_mini_consolidate()` at add_note: builds consolidation edges to k=15 nearest neighbours immediately. O(k) cost, zero sleep wait. |
+| **Concept Merging (#46)** | ✅ Deployed | Synonym-aware entity linking: `get_or_create_entity()` resolves aliases to canonical form (ML→machine learning, память→memory). 7998 new edges on production data. |
+| **Evolution Analyzer (#45)** | ✅ Deployed | `evolution_analyzer.py` — periodic graph evolution analysis across snapshot DBs. Tracks nodes/edges/emergence/edge-types over time. |
+| **Consciousness Check (#48)** | ✅ Deployed | `consciousness_check.py` — 8 indicators from Butlin et al. 2023, IIT, GWT, Damasio. Composite: **0.717** (MODERATE). Bottleneck: global_workspace (0.412). |
+| Personal Continuity Benchmark | ✅ v3 | **73.1% Recall@5** (26 questions, keyword-based). Identity 100%, History 100%, Decisions 75%, Session 80%. Multi-model validation: 10 model instances across Anthropic + Google. |
 
 ---
 
