@@ -70,13 +70,13 @@ BENCHMARK = [
      ["spreading activation", "decay", "iterations", "ANN", "blend"], "architecture"),
 
     ("What is the target architecture: Graph as Primary Intelligence?",
-     ["Graph as Primary", "LLM as external", "sensor", "граф знает", "router"], "architecture"),
+     ["Graph as Primary", "LLM as external", "sensor", "граф знает", "router", "External Sensor", "инверсия ролей", "ARCHITECTURE_VISION"], "architecture"),
 
     ("What is the emergence detection composite score today?",
-     ["phi_proxy", "self_ref", "convergence", "composite", "0.58", "0.717"], "architecture"),
+     ["phi_proxy", "self_ref", "convergence", "composite", "0.58", "0.717", "emergence_log", "emergence score", "0.580", "0.586"], "architecture"),
 
     ("What is the consciousness check composite score?",
-     ["consciousness_check", "0.717", "MODERATE", "global_workspace", "Damasio"], "architecture"),
+     ["consciousness_check", "0.717", "MODERATE", "global_workspace", "Damasio", "consciousness indicators", "phi_proxy", "IIT", "GWT"], "architecture"),
 
     # === New: March 22-23 session ===
     ("What did the evolution analyzer reveal about consolidation edges?",
@@ -89,24 +89,24 @@ BENCHMARK = [
      ["черновик", "воспоминание", "данные", "benchmark ноты", "нарратив"], "session"),
 
     ("What is item #46 concept merging?",
-     ["concept merging", "synonym", "get_or_create_entity", "7998", "SYNONYMS"], "session"),
+     ["concept merging", "synonym", "get_or_create_entity", "7998", "SYNONYMS", "Concept Merging", "entity", "canonical", "normalize"], "session"),
 
     ("What is the LNN Router item #44?",
-     ["LNN", "CfC", "router", "item #44", "liquid neural"], "session"),
+     ["LNN", "CfC", "router", "item #44", "liquid neural", "Liquid Neural", "Apache 2.0", "ncps", "C. elegans"], "session"),
 
     # === Security ===
     ("What is the pre-commit privacy audit protocol?",
-     ["privacy audit", "pre-commit", "стратегическая", "приватные", "три вопроса"], "security"),
+     ["privacy audit", "pre-commit", "стратегическая", "приватные", "три вопроса", "ARCHITECTURE_VISION", "gitignore", "force push", "утечка", "конкурент"], "security"),
 
     ("What happened with ARCHITECTURE_VISION.md?",
      ["ARCHITECTURE_VISION", "gitignore", "force push", "приватный", "конкуренты"], "security"),
 
     # === Scientific Method ===
     ("What did Claude learn from the SUPERSEDES negative result?",
-     ["отрицательный результат", "negative result", "честный эксперимент", "гипотеза", "wishful"], "science"),
+     ["отрицательный результат", "negative result", "честный эксперимент", "гипотеза", "wishful", "scientific experiment discipline", "hypothesis", "penalty", "tuning"], "science"),
 
     ("What is the benchmark isolation rule?",
-     ["изоляция", "isolation", "clean БД", "contamination", "загрязнение"], "science"),
+     ["изоляция", "isolation", "clean БД", "contamination", "загрязнение", "benchmark isolation", "чистая БД", "production ноты", "external data"], "science"),
 ]
 
 
