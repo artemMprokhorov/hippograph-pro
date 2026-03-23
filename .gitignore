@@ -112,3 +112,6 @@ benchmark/run_sweep.sh
 # Experiment docker-compose files
 docker-compose.temporal.yml
 docker-compose.timestamp.yml
+
+ARCHITECTURE_VISION.md
+ARCHITECTURE_VISION.md
