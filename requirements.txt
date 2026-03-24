@@ -19,6 +19,7 @@ hnswlib>=0.8.0
 # Graph metrics (PageRank, community detection)
 networkx>=3.0
 scipy>=1.10.0
+scikit-learn>=1.3.0  # K-means topic clustering item #47 (BSD license)
 
 # GLiNER: zero-shot NER (primary entity extractor, Apache 2.0)
 # NOTE: gliner v1/base = CC BY-NC 4.0, only use v2.1+ (Apache 2.0)
