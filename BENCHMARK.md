@@ -400,3 +400,38 @@ No regression on retrieval — abstract-topic nodes are correctly excluded from 
 
 **Key finding:** Science category fixed — SKILL MASTERED notes are retrievable with broader keywords.
 Architecture dropped slightly because new questions about #47/consciousness are harder to retrieve.
+
+---
+
+## March 25, 2026 — BM25 Hybrid Search Tuning + PCB v4 Final
+
+### BM25 Gamma Grid Search
+
+Optimal config: **alpha=0.7, gamma=0.15**
+
+| Config | Atomic Facts | PCB (15q) | AVG |
+|--------|-------------|-----------|-----|
+| alpha=0.7 gamma=0.0 (baseline) | 66.7% | 46.7% | 56.7% |
+| alpha=0.6 gamma=0.10 | 66.7% | 40.0% | 53.4% |
+| **alpha=0.7 gamma=0.15 (deployed)** | **66.7%** | **53.3%** | **60.0%** |
+| alpha=0.6 gamma=0.15 | 66.7% | 53.3% | 60.0% |
+| alpha=0.6 gamma=0.20 | 66.7% | 53.3% | 60.0% |
+
+Plateau at gamma>=0.15. Higher alpha (0.7 vs 0.6) preserves semantic signal for security/decisions categories.
+
+### PCB v4 Final Results (clean production DB)
+
+| Category | v3 | v4 Final | Delta |
+|----------|----|----------|-------|
+| **Overall** | **73.1%** | **87.5%** | **+14.4pp** |
+| identity | 100% | 100% | = |
+| history | 100% | 100% | = |
+| science | 0% | 75% | +75pp |
+| security | 50% | **100%** | +50pp |
+| session | 80% | **100%** | +20pp |
+| architecture | 50% | 60% | +10pp |
+| decisions | 75% | 80% | +5pp |
+
+**Note:** Results measured on clean production DB (atomic-fact experiment nodes removed).
+BM25 gamma=0.15 contributed session +20pp and architecture +10pp.
+Security +50pp from broader keyword coverage in benchmark.

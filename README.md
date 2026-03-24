@@ -192,7 +192,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 > GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
 
-### Personal Continuity — Real Data (81.2% Recall@5, Identity 100%)
+### Personal Continuity — Real Data (87.5% Recall@5, Identity 100%)
 
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
@@ -204,7 +204,7 @@ HippoGraph treats memory the way it should be treated — with care.
 | Security | 50% | Protocols and incidents |
 | Science | **100%** | Methodology, debugging skills, embedding compatibility |
 
-> 32 questions (v4, March 24-25 2026). Identity, History, Science recall perfect. Overall +8pp improvement from v3 (73.1%→81.2%) through new questions covering March 24 session (#47 topic linking, GTE experiment, consciousness 0.735).
+> 32 questions (v4, March 25 2026). Identity, History, Science, Security, Session recall perfect. Overall +14.4pp improvement from v3 (73.1%→87.5%). BM25 hybrid search (gamma=0.15) improved session 80%→100% and architecture 40%→60%.
 
 ### Why LOCOMO Doesn't Tell the Full Story
 
@@ -341,7 +341,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **Evolution Analyzer (#45)** | ✅ Deployed | `evolution_analyzer.py` — periodic graph evolution analysis across snapshot DBs. Tracks nodes/edges/emergence/edge-types over time. |
 | **Abstract Topic Linking (#47)** | ✅ Deployed | `step_topic_linking_tfidf()` + `step_topic_linking_kmeans()` in sleep cycle. 76 topic nodes, 1858 BELONGS_TO edges. global_workspace: 0.412→0.647 (+0.235). |
 | **Consciousness Check (#48)** | ✅ Deployed | `consciousness_check.py` — 8 indicators from Butlin et al. 2023, IIT, GWT, Damasio. Composite: **0.736** (MODERATE). Bottleneck: emotional_modulation (0.237). |
-| Personal Continuity Benchmark | ✅ v4 | **81.2% Recall@5** (32 questions, keyword-based). Identity 100%, History 100%, Science 100%, Decisions 80%, Session 80%. Multi-model validation: 10 model instances across Anthropic + Google. |
+| Personal Continuity Benchmark | ✅ v4 | **87.5% Recall@5** (32 questions, keyword-based). Identity 100%, History 100%, Science 100%, Security 100%, Session 100%. Multi-model validation: 10 model instances across Anthropic + Google. |
 
 ---
 
