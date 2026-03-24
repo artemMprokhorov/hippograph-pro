@@ -1312,6 +1312,351 @@ def step_emergence_check(db_path, dry_run=False):
     }
 
 
+
+
+def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
+    """
+    Variant A: Abstract Topic Linking via TF-IDF on community clusters.
+    For each community cluster:
+      1. Collect all note content in cluster
+      2. TF-IDF top-3 terms = topic label
+      3. Create topic node (category: abstract-topic)
+      4. Create BELONGS_TO edges: cluster notes -> topic node
+    Raises global_workspace signal in consciousness_check.
+    """
+    import sqlite3, re, math
+    from collections import Counter
+
+    STOPWORDS = set([
+        'the','a','an','is','are','was','were','be','been','being',
+        'have','has','had','do','does','did','will','would','could','should',
+        'may','might','shall','this','that','these','those','it','its',
+        'in','on','at','to','for','of','and','or','but','not','with',
+        'from','by','as','into','about','what','how','when','where','who',
+        'это','так','что','как','для','не','в','и','у','на','от','по','из','при',
+        'no','yes','we','i','you','he','she','they','our','my','your',
+        '1','2','3','4','5','0','true','false','none',
+    ])
+
+    conn = sqlite3.connect(db_path)
+    try:
+        # Get all cluster summaries
+        clusters = conn.execute(
+            'SELECT id, representative_node_id, cluster_size FROM cluster_summaries'
+        ).fetchall()
+
+        if not clusters:
+            print(f'  [topic-tfidf] No clusters found, skipping')
+            return {'created': 0, 'edges': 0}
+
+        # Remove old BELONGS_TO edges from this variant
+        if not dry_run:
+            conn.execute("DELETE FROM edges WHERE edge_type='BELONGS_TO'")  # reset both variants
+
+        # Get all nodes with their community (via cluster representative lookup)
+        # We use spreading activation cluster membership from community detection
+        # community_label stored in edges or via PageRank clusters
+        # Use cluster_summaries.representative_node_id as anchor
+        # For each cluster: find all nodes via consolidation edges to representative
+        nodes_all = conn.execute('SELECT id, content FROM nodes').fetchall()
+        node_content = {r[0]: r[1] or '' for r in nodes_all}
+
+        # Build community map via existing community structure
+        # Use cluster_summaries + consolidation edges to find members
+        topic_nodes_created = 0
+        edges_created = 0
+        processed_topics = []
+
+        # First pass: collect all topic candidates
+        topic_candidates = {}  # label -> list of member_ids
+
+        for cluster_id, rep_id, cluster_size in clusters:
+            if cluster_size < min_cluster_size:
+                continue
+
+            # Find cluster members via consolidation edges from rep
+            members_rows = conn.execute(
+                "SELECT DISTINCT source_id FROM edges "
+                "WHERE target_id=? AND edge_type='consolidation' "
+                "UNION "
+                "SELECT DISTINCT target_id FROM edges "
+                "WHERE source_id=? AND edge_type='consolidation' "
+                "LIMIT 50",
+                (rep_id, rep_id)
+            ).fetchall()
+            member_ids = [r[0] for r in members_rows]
+            if rep_id not in member_ids:
+                member_ids.append(rep_id)
+
+            if len(member_ids) < min_cluster_size:
+                continue
+
+            # Collect all words from cluster notes
+            words_all = []
+            for nid in member_ids:
+                text = node_content.get(nid, '')
+                tokens = re.findall(r'[a-zA-ZЀ-ӿ]{3,}', text.lower())
+                words_all.extend([t for t in tokens if t not in STOPWORDS])
+
+            if len(words_all) < 5:
+                continue
+
+            # TF (term frequency in this cluster)
+            tf = Counter(words_all)
+            total = sum(tf.values())
+
+            # Simple TF score (IDF would need global stats, skip for now)
+            top_terms = [w for w, _ in tf.most_common(5)
+                        if len(w) > 3 and w not in STOPWORDS][:3]
+
+            if not top_terms:
+                continue
+
+            topic_label = ' / '.join(sorted(top_terms))  # sorted for dedup
+            if topic_label not in topic_candidates:
+                topic_candidates[topic_label] = []
+            topic_candidates[topic_label].extend(member_ids)
+
+        # Second pass: create unique topic nodes
+        for topic_label, all_member_ids in topic_candidates.items():
+            all_member_ids = list(set(all_member_ids))  # dedup node ids
+            if len(all_member_ids) < min_cluster_size:
+                continue
+
+            NL = '\n'
+            topic_content = (
+                f'ABSTRACT TOPIC (TF-IDF): {topic_label}' + NL +
+                f'{len(all_member_ids)} members' + NL +
+                f'Terms: {topic_label}'
+            )
+
+            if dry_run:
+                processed_topics.append(topic_label)
+                edges_created += len(all_member_ids)
+                topic_nodes_created += 1
+                continue
+
+            # Check if topic node already exists
+            existing = conn.execute(
+                "SELECT id FROM nodes WHERE category='abstract-topic' "
+                "AND content LIKE ?",
+                (f'%TF-IDF): {topic_label}%',)
+            ).fetchone()
+
+            if existing:
+                topic_node_id = existing[0]
+                conn.execute(
+                    'UPDATE nodes SET content=? WHERE id=?',
+                    (topic_content, topic_node_id)
+                )
+            else:
+                conn.execute(
+                    'INSERT INTO nodes (content, category, importance, emotional_intensity) '
+                    'VALUES (?, ?, ?, ?)',
+                    (topic_content, 'abstract-topic', 'critical', 3)
+                )
+                topic_node_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+                topic_nodes_created += 1
+
+            # Create BELONGS_TO edges
+            for nid in all_member_ids:
+                exists = conn.execute(
+                    "SELECT 1 FROM edges WHERE source_id=? AND target_id=? "
+                    "AND edge_type='BELONGS_TO'",
+                    (nid, topic_node_id)
+                ).fetchone()
+                if not exists:
+                    conn.execute(
+                        'INSERT INTO edges (source_id, target_id, edge_type, weight) '
+                        'VALUES (?, ?, ?, ?)',
+                        (nid, topic_node_id, 'BELONGS_TO', 0.5)
+                    )
+                    # Reverse: topic -> note (enables spreading activation through topic)
+                    conn.execute(
+                        'INSERT INTO edges (source_id, target_id, edge_type, weight) '
+                        'VALUES (?, ?, ?, ?)',
+                        (topic_node_id, nid, 'BELONGS_TO', 0.4)
+                    )
+                    edges_created += 2
+
+            processed_topics.append(topic_label)
+
+        if not dry_run:
+            conn.commit()
+
+        print(f'  [topic-tfidf] Topics: {topic_nodes_created} created, '
+              f'{edges_created} BELONGS_TO edges')
+        if processed_topics:
+            print(f'  [topic-tfidf] Sample topics: {processed_topics[:5]}')
+
+        return {'created': topic_nodes_created, 'edges': edges_created,
+                'topics': processed_topics}
+
+    except Exception as e:
+        print(f'  [topic-tfidf] ERROR: {e}')
+        import traceback; traceback.print_exc()
+        return {'error': str(e)}
+    finally:
+        conn.close()
+
+
+def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
+    """
+    Variant B: Abstract Topic Linking via K-means on embeddings.
+    1. Load all node embeddings from ANN index or recompute
+    2. K-means clustering (n_topics = n_nodes // 30 by default)
+    3. Create topic nodes from cluster centroids
+    4. Create BELONGS_TO edges: each node -> nearest topic
+    More semantically accurate than TF-IDF variant.
+    """
+    import sqlite3
+    import numpy as np
+
+    try:
+        from sklearn.cluster import KMeans
+        from sklearn.preprocessing import normalize
+    except ImportError:
+        print('  [topic-kmeans] sklearn not available, skipping')
+        return {'error': 'sklearn not available'}
+
+    conn = sqlite3.connect(db_path)
+    try:
+        # Load all embeddings
+        nodes = conn.execute(
+            'SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL'
+        ).fetchall()
+
+        if len(nodes) < 10:
+            print(f'  [topic-kmeans] Not enough nodes with embeddings ({len(nodes)})')
+            return {'created': 0, 'edges': 0}
+
+        node_ids = [r[0] for r in nodes]
+        embeddings = np.frombuffer(
+            b''.join(r[1] for r in nodes), dtype=np.float32
+        ).reshape(len(nodes), -1)
+
+        if embeddings.shape[0] != len(node_ids):
+            # Fallback: load one by one
+            emb_list = []
+            valid_ids = []
+            for nid, emb_bytes in nodes:
+                try:
+                    emb = np.frombuffer(emb_bytes, dtype=np.float32)
+                    emb_list.append(emb)
+                    valid_ids.append(nid)
+                except:
+                    pass
+            node_ids = valid_ids
+            embeddings = np.array(emb_list)
+
+        # Normalize
+        embeddings = normalize(embeddings)
+
+        # Auto k
+        k = n_topics or max(10, len(node_ids) // 30)
+        k = min(k, len(node_ids) // 3)
+        print(f'  [topic-kmeans] {len(node_ids)} nodes, k={k} topics')
+
+        if dry_run:
+            print(f'  [topic-kmeans] DRY RUN: would create {k} topics')
+            return {'created': k, 'edges': len(node_ids)}
+
+        # K-means
+        km = KMeans(n_clusters=k, random_state=42, n_init=10)
+        labels = km.fit_predict(embeddings)
+
+        # Remove old kmeans BELONGS_TO edges
+        # BELONGS_TO already reset by tfidf step or do it here
+        conn.execute("DELETE FROM edges WHERE edge_type='BELONGS_TO'")
+
+        topic_nodes_created = 0
+        edges_created = 0
+
+        for cluster_idx in range(k):
+            cluster_mask = labels == cluster_idx
+            cluster_node_ids = [node_ids[i] for i, m in enumerate(cluster_mask) if m]
+
+            if len(cluster_node_ids) < 2:
+                continue
+
+            # Get sample content for topic label
+            samples = conn.execute(
+                'SELECT content FROM nodes WHERE id IN ({}) LIMIT 3'.format(
+                    ','.join('?' * len(cluster_node_ids[:5]))
+                ),
+                cluster_node_ids[:5]
+            ).fetchall()
+            sample_words = []
+            import re
+            for s in samples:
+                words = re.findall(r'[a-zA-ZЀ-ӿ]{4,}', (s[0] or '').lower())
+                sample_words.extend(words[:10])
+
+            from collections import Counter
+            STOPWORDS = set(['this','that','with','from','have','been','will','would','about','were'])
+            top = [w for w, _ in Counter(sample_words).most_common(10)
+                   if w not in STOPWORDS][:3]
+            topic_label = ' / '.join(top) if top else f'topic_{cluster_idx}'
+
+            NL = '\n'
+            topic_content = (
+                f'ABSTRACT TOPIC (K-means): {topic_label}' + NL +
+                f'Cluster {cluster_idx}/{k}, {len(cluster_node_ids)} members'
+            )
+
+            # Create or update topic node
+            existing = conn.execute(
+                "SELECT id FROM nodes WHERE category='abstract-topic' "
+                "AND content LIKE ?",
+                (f'%K-means%Cluster {cluster_idx}/{k}%',)
+            ).fetchone()
+
+            if existing:
+                topic_node_id = existing[0]
+                conn.execute('UPDATE nodes SET content=? WHERE id=?',
+                             (topic_content, topic_node_id))
+            else:
+                conn.execute(
+                    'INSERT INTO nodes (content, category, importance, emotional_intensity) '
+                    'VALUES (?, ?, ?, ?)',
+                    (topic_content, 'abstract-topic', 'critical', 3)
+                )
+                topic_node_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+                topic_nodes_created += 1
+
+            # BELONGS_TO edges
+            for nid in cluster_node_ids:
+                exists = conn.execute(
+                    "SELECT 1 FROM edges WHERE source_id=? AND target_id=? "
+                    "AND edge_type='BELONGS_TO'",
+                    (nid, topic_node_id)
+                ).fetchone()
+                if not exists:
+                    conn.execute(
+                        'INSERT INTO edges (source_id, target_id, edge_type, weight) '
+                        'VALUES (?, ?, ?, ?)',
+                        (nid, topic_node_id, 'BELONGS_TO', 0.6)
+                    )
+                    # Reverse: topic -> note
+                    conn.execute(
+                        'INSERT INTO edges (source_id, target_id, edge_type, weight) '
+                        'VALUES (?, ?, ?, ?)',
+                        (topic_node_id, nid, 'BELONGS_TO', 0.5)
+                    )
+                    edges_created += 2
+
+        conn.commit()
+        print(f'  [topic-kmeans] Topics: {topic_nodes_created} created, '
+              f'{edges_created} BELONGS_TO edges')
+        return {'created': topic_nodes_created, 'edges': edges_created, 'k': k}
+
+    except Exception as e:
+        print(f'  [topic-kmeans] ERROR: {e}')
+        import traceback; traceback.print_exc()
+        return {'error': str(e)}
+    finally:
+        conn.close()
+
 def run_all(db_path, dry_run=False):
     """Run all sleep-time compute steps."""
     t0 = time.time()
@@ -1419,6 +1764,18 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in entity merge: {e}")
         results['entity_merge'] = {"error": str(e)}
+
+    try:
+        results['topic_tfidf'] = step_topic_linking_tfidf(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in topic linking tfidf: {e}")
+        results['topic_tfidf'] = {"error": str(e)}
+
+    try:
+        results['topic_kmeans'] = step_topic_linking_kmeans(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in topic linking kmeans: {e}")
+        results['topic_kmeans'] = {"error": str(e)}
 
     # Update last_sleep_at timestamp
     if not dry_run:

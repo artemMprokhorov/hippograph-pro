@@ -106,12 +106,12 @@ def compute_global_workspace(conn):
         reached = set(top_ids)
         for nid in top_ids:
             neighbors = conn.execute(
-                'SELECT target_id FROM edges WHERE source_id=? LIMIT 200', (nid,)
+                'SELECT target_id FROM edges WHERE source_id=? LIMIT 2000', (nid,)
             ).fetchall()
             reached.update(r[0] for r in neighbors)
-            for nb in neighbors[:20]:  # 2nd hop sample
+            for nb in neighbors[:100]:  # 2nd hop sample
                 nn = conn.execute(
-                    'SELECT target_id FROM edges WHERE source_id=? LIMIT 50', (nb[0],)
+                    'SELECT target_id FROM edges WHERE source_id=? LIMIT 200', (nb[0],)
                 ).fetchall()
                 reached.update(r[0] for r in nn)
 

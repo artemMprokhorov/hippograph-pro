@@ -19,12 +19,14 @@ class StableEmbeddingModel:
             "EMBEDDING_MODEL", 
             "sentence-transformers/all-MiniLM-L6-v2"
         )
+        self.max_length = int(os.getenv("EMBEDDING_MAX_LENGTH", "512"))
         
         print(f"🤖 Loading embedding model: {model_name}")
         
         try:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-            self.model = AutoModel.from_pretrained(model_name)
+            trust_remote = os.getenv("TRUST_REMOTE_CODE", "false").lower() == "true"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=trust_remote)
+            self.model = AutoModel.from_pretrained(model_name, trust_remote_code=trust_remote)
             self.model.eval()
             
             self.device = torch.device("cpu")
@@ -47,7 +49,7 @@ class StableEmbeddingModel:
                 sentences,
                 padding=True,
                 truncation=True,
-                max_length=512,
+                max_length=self.max_length,
                 return_tensors="pt"
             )
             inputs = {k: v.to(self.device) for k, v in inputs.items()}

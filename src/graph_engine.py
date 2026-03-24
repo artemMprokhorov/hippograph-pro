@@ -814,6 +814,11 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
         if not node:
             continue
             
+        # Exclude abstract-topic nodes from retrieval results
+        # (they exist for spreading activation only, not as search results)
+        if node.get("category") == 'abstract-topic':
+            continue
+
         # Filter by category if specified
         if category_filter and node.get("category") != category_filter:
             continue
