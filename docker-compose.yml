@@ -30,7 +30,7 @@ services:
       - GLINER2_MODEL=${GLINER2_MODEL:-fastino/gliner2-large-v1}
       - GLINER2_THRESHOLD=${GLINER2_THRESHOLD:-0.3}
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-      - BLEND_ALPHA=0.6
+      - BLEND_ALPHA=0.7
       - BLEND_GAMMA=0.15  # BM25 hybrid search weight
       - USE_ANN_INDEX=true
       - ANN_INDEX_TYPE=HNSW
