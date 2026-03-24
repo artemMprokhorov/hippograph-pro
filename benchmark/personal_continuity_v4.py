@@ -125,10 +125,12 @@ BENCHMARK = [
     # === Security ===
     ("What is the pre-commit privacy audit protocol?",
      ["privacy audit", "pre-commit", "стратегическая", "приватные",
-      "три вопроса", "ARCHITECTURE_VISION", "gitignore", "force push"], "security"),
+      "три вопроса", "ARCHITECTURE_VISION", "gitignore", "force push",
+      "CRITICAL", "чеклист", "коммит", "аудит", "security-critical", "API Key"], "security"),
 
     ("What happened with ARCHITECTURE_VISION.md?",
-     ["ARCHITECTURE_VISION", "gitignore", "force push", "приватный", "конкуренты"], "security"),
+     ["ARCHITECTURE_VISION", "gitignore", "force push", "приватный", "конкуренты",
+      "секрет", "утечка", "private", "commit", "b19b8b9"], "security"),
 
     # === Scientific Method ===
     ("What did Claude learn from the SUPERSEDES negative result?",
