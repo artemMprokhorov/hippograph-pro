@@ -103,6 +103,40 @@ def create_app():
         notify_note_added()
         return jsonify(result)
     
+
+    @app.route("/api/add_edge", methods=["POST"])
+    def api_add_edge():
+        """Add a directed edge between two nodes."""
+        api_key = request.args.get('api_key', '')
+        expected_key = os.getenv('NEURAL_API_KEY', '')
+        if not expected_key or api_key != expected_key:
+            return jsonify({'error': 'unauthorized'}), 401
+        data = request.get_json()
+        source_id = data.get('source_id')
+        target_id = data.get('target_id')
+        edge_type = data.get('edge_type', 'semantic')
+        weight = float(data.get('weight', 0.7))
+        if not source_id or not target_id:
+            return jsonify({'error': 'source_id and target_id required'}), 400
+        from database import create_edge
+        create_edge(int(source_id), int(target_id), weight=weight, edge_type=edge_type)
+        return jsonify({'ok': True, 'source': source_id, 'target': target_id, 'type': edge_type})
+
+
+    @app.route("/api/note/<int:node_id>", methods=["DELETE"])
+    def api_delete_note(node_id):
+        api_key = request.args.get('api_key', '')
+        expected_key = os.getenv('NEURAL_API_KEY', '')
+        if not expected_key or api_key != expected_key:
+            return jsonify({'error': 'unauthorized'}), 401
+        from database import get_connection
+        with get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute('DELETE FROM edges WHERE source_id=? OR target_id=?', (node_id, node_id))
+            cur.execute('DELETE FROM nodes WHERE id=?', (node_id,))
+            deleted = cur.rowcount
+        return jsonify({'ok': bool(deleted), 'id': node_id})
+
     @app.route("/api/search", methods=["POST"])
     def api_search():
         """REST endpoint for searching (used by benchmark adapter)."""
