@@ -32,6 +32,10 @@ services:
       - EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
       - BLEND_ALPHA=0.7
       - BLEND_GAMMA=0.15  # BM25 hybrid search weight
+      - RERANK_ENABLED=true
+      - RERANK_MODEL=BAAI/bge-reranker-v2-m3
+      - RERANK_TOP_N=20
+      - RERANK_WEIGHT=0.5
       - USE_ANN_INDEX=true
       - ANN_INDEX_TYPE=HNSW
       - HNSW_M=32
