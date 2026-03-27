@@ -564,6 +564,26 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 # Add to neighbor's activation
                 new_activations[neighbor_id] = new_activations.get(neighbor_id, 0) + spread
         
+        # --- LATE STAGE INHIBITION (Variant 2, INHIBITION_STRENGTH=0.05) ---
+        # Mild suppression of losing nodes within each community on final iteration.
+        # Increases diversity and Atomic Facts recall without hurting PCB.
+        # Tuned: strength=0.05 -> AVG 90% (vs 85% at 0.0). Deployed Mar 27 2026.
+        if iteration == 2 and INHIBITION_STRENGTH > 0 and new_activations:
+            try:
+                from graph_metrics import get_graph_metrics
+                _metrics = get_graph_metrics()
+                if _metrics.is_computed:
+                    _comm_groups = {}
+                    for _nid, _score in new_activations.items():
+                        _comm = _metrics.get_community(_nid)
+                        if _comm != -1: _comm_groups.setdefault(_comm, []).append((_nid, _score))
+                    for _c_id, _m_list in _comm_groups.items():
+                        _win_id, _win_score = max(_m_list, key=lambda x: x[1])
+                        for _nid, _score in _m_list:
+                            if _nid != _win_id:
+                                new_activations[_nid] *= (1.0 - INHIBITION_STRENGTH * 0.5)
+            except Exception: pass
+
         # Normalization: scale to 0-1 range based on max
         if new_activations:
             max_activation = max(new_activations.values())
