@@ -118,17 +118,19 @@ Query → Temporal Decomposition
               ↓
     Spreading Activation (3 iterations, decay=0.7)
               ↓
+    [Late Stage Inhibition] (iter 3, per community, strength=0.05)
+              ↓
     BM25 Keyword Search (Okapi BM25)
               ↓
     Blend: α×semantic + β×spreading + γ×BM25 + δ×temporal
               ↓
-    Cross-Encoder Reranking (optional)
+    Cross-Encoder Reranking (bge-reranker-v2-m3, weight=0.5)
               ↓
     Temporal Decay (half-life=30 days)
               ↓
     CONTRADICTS Penalty (0.5× for contradicted notes)
               ↓
-    Lateral Inhibition (GABA analog — sub-community winners suppress)
+    Final Step Inhibition (post-blend, global)
               ↓
     Top-K Results
 ```
@@ -150,7 +152,7 @@ Regex ───────────────── dictionary matching on
 Biological sleep analog — runs in background while idle:
 - **Light sleep** (every 50 notes): stale edge decay, PageRank recalculation, duplicate scan, anchor importance boost
 - **Deep sleep** (daily): GLiNER2 relation extraction, conflict detection, snapshot + rollback
-- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.736** (consciousness check composite, 8 indicators) / **0.586** (emergence_log composite). Up from 0.469 at first measurement since March 16 2026. global_workspace improved 0.412→0.647 after #47. New bottleneck: emotional_modulation (0.237).
+- **Emergence check** (each cycle): three-signal detection — convergence, phi_proxy (IIT-inspired), self-referential precision. Logs to `emergence_log` table for trend analysis. Current score: **0.707** (consciousness check composite, 8 indicators) / **0.586** (emergence_log composite). Up from 0.469 at first measurement since March 16 2026. global_workspace improved 0.412→0.647 after #47. emotional_modulation improved 0.063→0.201 after batch ANN consolidation + psychology skills (#32). New bottleneck: emotional_modulation (0.201).
 
 ---
 
@@ -204,7 +206,7 @@ HippoGraph treats memory the way it should be treated — with care.
 | Security | 50% | Protocols and incidents |
 | Science | **100%** | Methodology, debugging skills, embedding compatibility |
 
-> 32 questions (v4, March 25 2026). Identity, History, Science, Security, Session recall perfect. Overall +14.4pp improvement from v3 (73.1%→87.5%). BM25 hybrid search (gamma=0.15) improved session 80%→100% and architecture 40%→60%.
+> 32 questions (v4, March 25 2026). Identity, History, Science, Security, Session recall perfect. Overall +14.4pp improvement from v3 (73.1%→87.5%). BM25 hybrid search (gamma=0.15) improved session 80%→100% and architecture 40%→60%. March 27: bge-reranker-v2-m3 + Late Stage Inhibition (INHIBITION_STRENGTH=0.05) deployed — combined stack AVG 90% on internal benchmark.
 
 ### Why LOCOMO Doesn't Tell the Full Story
 
@@ -310,7 +312,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Emotional Memory | ✅ Deployed | Tone, intensity, reflection as first-class fields |
 | GLiNER NER | ✅ Deployed | Zero-shot entity extraction, LLM quality at 35x speed |
 | BM25 Hybrid Search | ✅ Deployed | Three-signal blend (semantic + graph + keyword) |
-| Cross-Encoder Reranking | ✅ Deployed | Precision improvement, optional |
+| Cross-Encoder Reranking | ✅ Deployed | bge-reranker-v2-m3 (Apache 2.0). PCB +43pp vs baseline. RERANK_WEIGHT=0.5, TOP_N=20. |
 | Temporal Decay | ✅ Deployed | Important memories persist, trivial ones fade |
 | Anchor Protection | ✅ Deployed | Critical memories exempt from decay |
 | User-Defined Anchor Policies | ✅ Deployed | Add/remove custom protected categories via MCP without code changes |
@@ -326,7 +328,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **CONTRADICTS Edges** | ✅ Deployed | Biological cognitive dissonance: contradicting notes suppress each other (0.5x penalty when contradicting note is active in retrieval) |
 | **EMOTIONAL_RESONANCE Edges** | ✅ Deployed | Amygdala analog: notes sharing 2+ emotional tone tags form affective links (Jaccard, multilingual: RU/ES/DE/FR/PT tags normalized to EN, 1031 edges) |
 | **GENERALIZES / INSTANTIATES Edges** | ✅ Deployed | Prefrontal cortex analog: critical-lessons GENERALIZES protocols (cosine >=0.65, 70 edges; debug/session-summary excluded as too generic) |
-| **Lateral Inhibition** | ✅ Deployed | GABA analog: sub-community detection (resolution=2.0, ~100 clusters) + post-blend winner-takes-most suppression. Increases result diversity (3.2→4.8 unique clusters in top-5) |
+| **Lateral Inhibition** | ✅ Deployed | GABA analog: Late Stage (iter 3, INHIBITION_STRENGTH=0.05) + Final Step (post-blend). Two-stage suppression. Grid search: AVG 85%→90% at strength=0.05. Diversity: 3.2→4.8 unique clusters in top-5. |
 | **SUPERSEDES Edge Type** | ✅ Deployed | Temporal state mutation edges via `step_supersedes_scan()` (threshold=0.85, 449 pairs). Penalty removed after tuning — edges reserved for LNN Temporal Reasoner (item #44). |
 | **Emergence Detection** | ✅ Deployed | Three-signal metric: convergence (focus), phi_proxy (integration), self-referential P@5 (self-model). Logged each sleep cycle to track graph maturation |
 | **Temporal Filtering (dateparser)** | ✅ Deployed | Natural language time queries: "last week", "на прошлой неделе", "yesterday" auto-convert to time filters |
