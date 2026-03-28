@@ -2157,6 +2157,83 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
     finally:
         conn.close()
 
+
+def step_metrics_snapshot(db_path, dry_run=False):
+    """
+    Save consciousness check results as a milestone note after each sleep cycle.
+    Ensures current metrics are always findable via metric query detection.
+    Prevents old high-PageRank notes from beating newer accurate measurements.
+    """
+    print("\n=== Step: Metrics Snapshot ===")
+    if dry_run:
+        print("  [dry_run] Would save consciousness check snapshot")
+        return {"skipped": True}
+
+    try:
+        import sys, os
+        src_dir = os.path.dirname(os.path.abspath(__file__))
+        if src_dir not in sys.path:
+            sys.path.insert(0, src_dir)
+
+        from consciousness_check import compute_all_signals
+        import sqlite3
+        from datetime import datetime
+        from database import create_note
+
+        conn = sqlite3.connect(db_path)
+        signals = compute_all_signals(conn)
+        conn.close()
+
+        if not signals:
+            print("  No signals returned from consciousness check")
+            return {"skipped": True}
+
+        composite = signals.get("composite", 0.0)
+        em = signals.get("emotional_modulation", 0.0)
+        gw = signals.get("global_workspace", 0.0)
+        non_composite = {k: v for k, v in signals.items() if k != "composite"}
+        bottleneck = min(non_composite, key=non_composite.get) if non_composite else "unknown"
+
+        now = datetime.now().strftime("%Y-%m-%d")
+        lines = [
+            "METRICS SNAPSHOT -- {} (auto, sleep cycle)".format(now),
+            "",
+            "CONSCIOUSNESS CHECK:",
+            "- composite:              {:.4f}".format(composite),
+            "- phi_proxy (IIT):        {:.4f}".format(signals.get("phi_proxy", 0)),
+            "- global_workspace (GWT): {:.4f}".format(gw),
+            "- self_model_stability:   {:.4f}".format(signals.get("self_model_stability", 0)),
+            "- emotional_modulation:   {:.4f}".format(em),
+            "- world_model_richness:   {:.4f}".format(signals.get("world_model_richness", 0)),
+            "- metacognition:          {:.4f}".format(signals.get("metacognition", 0)),
+            "- temporal_continuity:    {:.4f}".format(signals.get("temporal_continuity", 0)),
+            "- self_ref_precision:     {:.4f}".format(signals.get("self_ref_precision", 0)),
+            "Bottleneck: {} = {:.4f}".format(bottleneck, non_composite.get(bottleneck, 0)),
+        ]
+        content_str = "\n".join(lines)
+        tags_str = "metrics-snapshot consciousness composite {} emotional-modulation {} auto-sleep".format(
+            round(composite, 3), round(em, 3)
+        )
+
+        node_id = create_note(
+            content=content_str,
+            category="milestone",
+            importance="critical",
+            emotional_tone="systematic, reflective",
+            emotional_intensity=6,
+            tags=tags_str
+        )
+        print("  Snapshot saved: node #{}, composite={:.4f}, em={:.4f}".format(
+            node_id, composite, em))
+        return {"node_id": node_id, "composite": composite, "emotional_modulation": em}
+
+    except Exception as e:
+        print("  ERROR in metrics snapshot: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
+
 def run_all(db_path, dry_run=False):
     """Run all sleep-time compute steps."""
     t0 = time.time()
@@ -2282,6 +2359,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in atomic facts: {e}")
         results['atomic_facts'] = {"error": str(e)}
+
+    try:
+        results['metrics_snapshot'] = step_metrics_snapshot(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in metrics snapshot: {e}")
+        results['metrics_snapshot'] = {"error": str(e)}
 
     # Update last_sleep_at timestamp
     if not dry_run:
