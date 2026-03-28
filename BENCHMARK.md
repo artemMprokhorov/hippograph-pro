@@ -549,3 +549,47 @@ Query → Embedding → ANN Search (HNSW)
                      ↓
           Top-K Results
 ```
+---
+
+## March 28, 2026 — LOCOMO Production Re-run (New Stack)
+
+### Setup
+
+| Parameter | Value |
+|-----------|-------|
+| Dataset | LOCOMO-10 (1,540 queries, excluding adversarial) |
+| Metric | Recall@5, MRR |
+| LLM calls | **0** |
+| Embedding model | paraphrase-multilingual-MiniLM-L12-v2 |
+| Reranker | bge-reranker-v2-m3 (Apache 2.0), weight=0.5, top-N=20 |
+| Blend weights | α=0.7 (semantic), β=0.25 (spreading), γ=0.15 (BM25) |
+| Inhibition | Late Stage (iter 3) + Final Step, strength=0.05 |
+| Granularity | Turn-level (~5,870 notes) |
+| Category decay | Disabled (benchmark only) |
+
+### Results
+
+| Category | Queries | Hits | Recall@5 | MRR |
+|----------|---------|------|----------|-----|
+| **Overall** | **1,540** | **1,008** | **65.5%** | **0.562** |
+| single-hop | 282 | 147 | 52.1% | 0.434 |
+| multi-hop | 321 | 235 | 73.2% | 0.656 |
+| temporal | 96 | 34 | 35.4% | 0.269 |
+| open-domain | 841 | 592 | 70.4% | 0.603 |
+
+### Comparison with Previous Production Run (March 20, 2026)
+
+| Category | Mar 20 | Mar 28 | Delta |
+|----------|--------|--------|-------|
+| **Overall** | **47.9%** | **65.5%** | **+17.6pp** |
+| single-hop | 42.6% | 52.1% | +9.5pp |
+| multi-hop | 54.5% | 73.2% | +18.7pp |
+| temporal | 24.0% | 35.4% | +11.4pp |
+| open-domain | 49.8% | 70.4% | +20.6pp |
+
+**Key finding:** +17.6pp overall improvement from bge-reranker-v2-m3 + Late Stage Inhibition (strength=0.05).
+Multi-hop gained most (+18.7pp) — reranker most effective for associative reasoning across notes.
+Open-domain +20.6pp — consistent with PCB results showing strong semantic retrieval.
+Temporal remains hardest category (structural ceiling without LLM reasoning layer).
+
+**MRR 0.562** vs 0.362 previously (+0.200) — not just more hits, but correct answers ranked higher.
