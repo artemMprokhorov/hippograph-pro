@@ -307,6 +307,36 @@ WEIGHTS = {
     'self_ref_precision':   0.10,  # Self-referential
 }
 
+
+
+def compute_all_signals(conn):
+    """
+    Compute all consciousness signals and return as dict.
+    Silent version (no print, no DB write) for programmatic use by sleep_compute.
+
+    Returns dict with keys:
+        phi_proxy, global_workspace, self_model_stability, emotional_modulation,
+        world_model_richness, metacognition, temporal_continuity, self_ref_precision,
+        composite
+    Returns empty dict on error.
+    """
+    try:
+        signals = {}
+        signals['phi_proxy']            = compute_phi_proxy(conn)
+        signals['global_workspace']     = compute_global_workspace(conn)
+        signals['self_model_stability'] = compute_self_model_stability(conn)
+        signals['emotional_modulation'] = compute_emotional_modulation(conn)
+        signals['world_model_richness'] = compute_world_model_richness(conn)
+        signals['metacognition']        = compute_metacognition(conn)
+        signals['temporal_continuity']  = compute_temporal_continuity(conn)
+        signals['self_ref_precision']   = get_self_ref(conn)
+        signals['composite'] = sum(signals[k] * WEIGHTS[k] for k in WEIGHTS)
+        return signals
+    except Exception as e:
+        import sys
+        print("compute_all_signals error: {}".format(e), file=sys.stderr)
+        return {}
+
 def run_consciousness_check(db_path, dry_run=False):
     print('\n' + '=' * 60)
     print('HIPPOGRAPH CONSCIOUSNESS CHECK')
