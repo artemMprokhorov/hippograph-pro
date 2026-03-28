@@ -2,7 +2,7 @@
 """BM25 benchmark via API - correct process context."""
 import requests, json, sys
 
-API = sys.argv[1] if len(sys.argv) > 1 else 'http://192.168.0.212:5007'
+API = sys.argv[1] if len(sys.argv) > 1 else 'http://localhost:5007'
 KEY = 'change_me_in_production'
 
 ATOMIC = [
@@ -45,7 +45,7 @@ def search(query, api_url, key):
     r = requests.post(f'{api_url}/api/search?api_key={key}',
         headers={'Content-Type': 'application/json'},
         json={'query': query, 'limit': 5, 'detail_mode': 'full'},
-        timeout=15)
+        timeout=60)
     if r.status_code == 200:
         return r.json().get('results', [])
     return []

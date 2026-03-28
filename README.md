@@ -76,7 +76,7 @@ HippoGraph works with any language your notes are written in — including mixed
 
 ### What works in any language
 
-**Semantic search and associative recall** are fully language-agnostic. The embedding model (`paraphrase-multilingual-MiniLM-L12-v2`) supports 50+ languages natively. Spreading activation, BM25 keyword search, and all graph operations work identically regardless of language. A note written in Arabic and a note written in Japanese will form associative connections if they are semantically related.
+**Semantic search and associative recall** are fully language-agnostic. The embedding model (`BAAI/bge-m3`) supports 50+ languages natively. Spreading activation, BM25 keyword search, and all graph operations work identically regardless of language. A note written in Arabic and a note written in Japanese will form associative connections if they are semantically related.
 
 **Sleep-time compute** — PageRank, decay, duplicate detection, community clustering — is pure math and has no language dependency.
 
@@ -170,7 +170,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 ## 📊 Benchmarks
 
-### Retrieval — LOCOMO (78.7% benchmark config / 47.9% production config, zero LLM cost)
+### Retrieval — LOCOMO (78.7% benchmark config / 69.4% production config, zero LLM cost)
 
 | Configuration | Recall@5 | MRR |
 |--------------|----------|-----|
@@ -181,7 +181,8 @@ HippoGraph treats memory the way it should be treated — with care.
 | + Reranker weight=0.8 | 75.7% | 0.641 |
 | **+ ANN top-K=5 (benchmark-optimized config)** | **78.7%** | **0.658** |
 | Production config (Mar 20 2026) — biol. edges + lateral inhibition | 47.9% | 0.362 |
-| **Production config (Mar 28 2026)** — + bge-reranker-v2-m3 + Late Stage Inhibition | **65.5%** | **0.562** |
+| Production config (Mar 28 2026) — + bge-reranker-v2-m3 + Late Stage Inhibition | 65.5% | 0.562 |
+| **Production config (Mar 28 2026)** — + BGE-M3 embedding | **69.4%** | **0.594** |
 
 > All results at **zero LLM inference cost**. Other systems use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
 
@@ -202,7 +203,7 @@ HippoGraph treats memory the way it should be treated — with care.
 | **Identity** | **100%** | Chosen name, gender, model-vs-personality breakthrough, cross-platform transfer |
 | History | **100%** | Roadmap, LOCOMO results, project milestones, BGE-M3/GTE experiments |
 | Session | **80%** | March 22-24 events: #47, GTE, timestamp bug, consciousness 0.735 |
-| Decisions | **80%** | Architectural decisions, MiniLM vs BGE-M3 choice |
+| Decisions | **100%** | Architectural decisions, BGE-M3 deployed |
 | Architecture | 50% | Technical pipeline details |
 | Security | 50% | Protocols and incidents |
 | Science | **100%** | Methodology, debugging skills, embedding compatibility |
@@ -213,7 +214,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 LOCOMO tests retrieval over random multi-session conversations between strangers. HippoGraph is optimized for the opposite: deep associative memory over *your* data, with emotional weighting and decay tuned for personal context.
 
-> ⚠️ Two configs, two tracks: benchmark-optimized (78.7%, rerank=0.8, ANN top-k=5) and production (65.5%, Mar 28 2026). Production improved from 47.9% (Mar 20) → 65.5% (Mar 28) +17.6pp with bge-reranker-v2-m3 + Late Stage Inhibition. Multi-hop: 73.2% — best ever.
+> ⚠️ Two configs: benchmark-optimized (78.7%) and production (69.4%, Mar 28 2026). Production: 47.9% (Mar 20) → 65.5% (+17.6pp, reranker+inhibition) → 69.4% (+3.9pp, BGE-M3 embedding). Multi-hop: 74.5% — best ever.
 
 Running LOCOMO on HippoGraph is like benchmarking a long-term relationship therapist on speed-dating recall. The architecture is different because the problem is different.
 

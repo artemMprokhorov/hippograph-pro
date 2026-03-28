@@ -55,6 +55,11 @@ def create_app():
     from bm25_index import get_bm25_index
     bm25_docs = [(n["id"], (n.get("content", "") + " " + (n.get("tags", "") or "")).strip()) for n in nodes]
     get_bm25_index().build(bm25_docs)
+
+    # Build BGE-M3 sparse index
+    from sparse_index import build as sparse_build, SPARSE_ENABLED
+    if SPARSE_ENABLED:
+        sparse_build(nodes)
     
     # Pre-load reranker model if enabled
     from reranker import get_reranker, RERANK_ENABLED

@@ -593,3 +593,47 @@ Open-domain +20.6pp — consistent with PCB results showing strong semantic retr
 Temporal remains hardest category (structural ceiling without LLM reasoning layer).
 
 **MRR 0.562** vs 0.362 previously (+0.200) — not just more hits, but correct answers ranked higher.
+
+---
+
+## March 28, 2026 — BGE-M3 Embedding Upgrade (Production Deploy)
+
+### Setup
+
+| Parameter | Value |
+|-----------|-------|
+| Dataset | LOCOMO-10 (1,540 queries, excluding adversarial) |
+| Metric | Recall@5, MRR |
+| LLM calls | **0** |
+| Embedding model | **BAAI/bge-m3** (MIT, 1024-dim, 8192 token context) |
+| Reranker | bge-reranker-v2-m3, weight=0.5, top-N=20 |
+| Blend weights | α=0.7 (semantic), β=0.25 (spreading), γ=0.15 (BM25) |
+| Inhibition | Late Stage, strength=0.05 |
+| Granularity | Turn-level (~5,882 notes) |
+
+### Results
+
+| Category | Queries | Hits | Recall@5 | MRR |
+|----------|---------|------|----------|-----|
+| **Overall** | **1,540** | **1,069** | **69.4%** | **0.594** |
+| single-hop | 282 | 177 | 62.8% | 0.504 |
+| multi-hop | 321 | 239 | 74.5% | 0.662 |
+| temporal | 96 | 37 | 38.5% | 0.261 |
+| open-domain | 841 | 616 | 73.2% | 0.635 |
+
+### Comparison vs Previous Production (MiniLM, March 28)
+
+| Category | MiniLM | BGE-M3 | Delta |
+|----------|--------|--------|-------|
+| **Overall** | **65.5%** | **69.4%** | **+3.9pp** |
+| single-hop | 52.1% | 62.8% | +10.7pp |
+| multi-hop | 73.2% | 74.5% | +1.3pp |
+| temporal | 35.4% | 38.5% | +3.1pp |
+| open-domain | 70.4% | 73.2% | +2.8pp |
+| MRR | 0.562 | 0.594 | +0.032 |
+
+**PCB v5: 100.0% AVG** (100% Atomic Facts + 100% Semantic) — first perfect score.
+
+**Key finding:** BGE-M3 (1024-dim) outperforms MiniLM (384-dim) across all categories.
+Single-hop gains most (+10.7pp) — larger embedding space captures precise factual associations.
+BGE-M3 and bge-reranker-v2-m3 are from the same model family — synergy between embedding and reranker.

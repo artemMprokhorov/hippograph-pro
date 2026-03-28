@@ -3,15 +3,15 @@ import requests, sys
 sys.path.insert(0, '/Volumes/Balances/hippograph-pro/benchmark')
 from bm25_api_bench import ATOMIC, PCB
 
-PROD_KEY = 'REDACTED_API_KEY'
+PROD_KEY = 'os.environ.get("NEURAL_API_KEY", "change_me")'
 BENCH_KEY = 'bench_key'
 
 CONFIGS = [
-    ('prod  alpha=0.7 gamma=0.00', 'http://192.168.0.212:5001', PROD_KEY),
-    ('exp   alpha=0.6 gamma=0.10', 'http://192.168.0.212:5020', BENCH_KEY),
-    ('exp   alpha=0.6 gamma=0.15', 'http://192.168.0.212:5007', 'change_me_in_production'),
-    ('exp   alpha=0.6 gamma=0.20', 'http://192.168.0.212:5030', BENCH_KEY),
-    ('exp   alpha=0.6 gamma=0.25', 'http://192.168.0.212:5040', BENCH_KEY),
+    ('prod  alpha=0.7 gamma=0.00', 'http://localhost:5001', PROD_KEY),
+    ('exp   alpha=0.6 gamma=0.10', 'http://localhost:5020', BENCH_KEY),
+    ('exp   alpha=0.6 gamma=0.15', 'http://localhost:5007', 'change_me_in_production'),
+    ('exp   alpha=0.6 gamma=0.20', 'http://localhost:5030', BENCH_KEY),
+    ('exp   alpha=0.6 gamma=0.25', 'http://localhost:5040', BENCH_KEY),
 ]
 
 def search(q, url, key):

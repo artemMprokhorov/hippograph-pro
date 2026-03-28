@@ -11,7 +11,7 @@ import sys, os, json, requests, sqlite3
 sys.path.insert(0, '/app/src')
 os.environ.setdefault('DB_PATH', '/app/data/memory.db')
 
-API_URL = os.environ.get('API_URL', 'http://192.168.0.212:5007')
+API_URL = os.environ.get('API_URL', 'http://localhost:5007')
 API_KEY = os.environ.get('NEURAL_API_KEY', 'change_me_in_production')
 DB_PATH = os.environ.get('DB_PATH', '/app/data/memory.db')
 

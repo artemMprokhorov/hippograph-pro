@@ -116,3 +116,27 @@ docker-compose.timestamp.yml
 ARCHITECTURE_VISION.md
 ARCHITECTURE_VISION.md
 ARCHITECTURE_VISION.md
+# Experiment directories
+data-bge/
+data-bge-locomo/
+data-exp/
+data-locomo/
+data-sparse/
+src-bge/
+src-exp/
+# Temp scripts
+fix_metric_patterns.py
+insert_func.py
+patch_sleep_snapshot.py
+write_snapshot_func.py
+snapshot_func.txt
+nginx_proxy_updated.conf
+docker-compose.bge.yml
+docker-compose.exp.yml
+backup_memory.sh
+conversation_*.md
+
+# Benchmark logs and results with private data
+benchmark/results/
+benchmark/*.log
+bm25_grid.py

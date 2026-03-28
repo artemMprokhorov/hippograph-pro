@@ -222,8 +222,11 @@ def fix_dimension_mismatch(db_path: str = None) -> int:
 
         to_fix = []
         for row in rows:
+            # FIX: If embedding is missing (NULL), add to fix list instead of skipping
             if row["embedding"] is None:
+                to_fix.append((row["id"], row["content"]))
                 continue
+
             emb = np.frombuffer(row["embedding"], dtype=np.float32)
             if len(emb) != expected_dim:
                 to_fix.append((row["id"], row["content"]))
@@ -231,7 +234,7 @@ def fix_dimension_mismatch(db_path: str = None) -> int:
         if not to_fix:
             return 0
 
-        print(f"🔧 fix_dimension_mismatch: found {len(to_fix)} nodes with wrong dim, recomputing...")
+        print(f"🔧 fix_dimension_mismatch: found {len(to_fix)} nodes to repair, recomputing...")
         for node_id, content in to_fix:
             try:
                 new_emb = model.encode(content)[0]
@@ -239,9 +242,9 @@ def fix_dimension_mismatch(db_path: str = None) -> int:
                 # Add to live index
                 ann_index.add_vector(node_id, new_emb)
                 fixed += 1
-                print(f"   ✅ Fixed node #{node_id}")
+                print(f"   ✅ Repaired node #{node_id}")
             except Exception as e:
-                print(f"   ❌ Failed to fix node #{node_id}: {e}")
+                print(f"   ❌ Failed to repair node #{node_id}: {e}")
 
         conn.commit()
         conn.close()
