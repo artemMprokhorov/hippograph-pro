@@ -139,4 +139,44 @@ Critically: this happens at **every `add_note` call**, not just during initial i
 
 *Last updated: March 29, 2026*
 *Production stack: BGE-M3 (1024-dim) + BM25 + Spreading Activation + bge-reranker-v2-m3*
-*Current benchmark: PCB v5 = 100%, LOCOMO Recall@5 = 69.4%*
+*Current benchmark: PCB v5 = 100%, LOCOMO Recall@5 = 69.4%*---
+
+## Experiment D: Overlap Chunking — Session Granularity (March 30 2026)
+
+**Hypothesis:** Splitting long session notes into overlapping chunks (50% overlap) with standard BGE-M3 dense encode will improve retrieval by allowing fine-grained matching within sessions.
+
+**Setup:**
+- Granularity: session-level (one note per session, not turn-level)
+- LC_CHUNK_CHARS=400, LC_OVERLAP_CHARS=200 (50% overlap)
+- LC_MIN_NOTE_CHARS=300
+- 269 sessions → 2,984 lc-chunk nodes
+- PART_OF edges: chunk → parent session note
+
+**Results:**
+
+| Variant | Recall@5 | Delta vs prod |
+|---------|----------|---------------|
+| Prod (turn-level, BGE-M3) | 69.4% | baseline |
+| Session only (no chunking) | 32.6% | -36.8pp |
+| **D1: parent normal + chunks** | **91.1%** | **+21.7pp** |
+| **D2: parent low + chunks** | **91.1%** | **+21.7pp** |
+| D3a: chunks only, no parent | ~0% | benchmark incompatible |
+
+**Key findings:**
+
+1. **D1 = D2** — parent node importance doesn't affect results. Parent does not compete with chunks in ANN search.
+2. **Session granularity + overlap chunking = +21.7pp** over turn-level production. Massive improvement.
+3. **Overlap chunking vs session without chunking = +58.5pp**. The overlap is critical — it preserves inter-sentence context.
+4. **D3a failed** — LOCOMO benchmark matches answers against full session text. Without parent nodes, chunks contain only partial text → 0% recall. This is a benchmark methodology issue, not a retrieval issue.
+
+**Why D3a is not a valid test:**
+LOCOMO QA pairs reference full session content. Chunks contain only 400-char windows. The benchmark cannot find exact matches in partial text. A proper test of chunks-only architecture requires a benchmark designed for chunked retrieval.
+
+**Decision:** Deploy D1 to production. Parent nodes are kept — they don't hurt and enable correct benchmark evaluation and full context reconstruction.
+
+**What we learned:**
+- Session granularity is dramatically better than turn-level for LOCOMO
+- 50% overlap preserves enough context for multi-hop and temporal queries
+- Parent nodes are architecturally harmless and practically useful
+- ColBERT (Experiment C) was the right idea but wrong execution for CPU
+- Standard dense encode + overlap achieves the goal at 50ms/chunk vs 2-3min/chunk
