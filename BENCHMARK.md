@@ -637,3 +637,85 @@ Temporal remains hardest category (structural ceiling without LLM reasoning laye
 **Key finding:** BGE-M3 (1024-dim) outperforms MiniLM (384-dim) across all categories.
 Single-hop gains most (+10.7pp) — larger embedding space captures precise factual associations.
 BGE-M3 and bge-reranker-v2-m3 are from the same model family — synergy between embedding and reranker.
+---
+
+## March 30-31, 2026 — Overlap Chunking (Experiment D) — Session Granularity
+
+### What
+Replaced turn-level granularity with session-level + overlap chunking:
+- Each LOCOMO session ingested as one parent note
+- Long notes (>300 chars) split into overlapping chunks (400 char chunks, 200 char overlap = 50%)
+- Chunks encoded with standard BGE-M3 dense encode (~50ms/chunk)
+- `lc-chunk` child nodes created with `PART_OF` edges to parent
+- No ColBERT, no GPU required
+
+### Setup
+
+| Parameter | Value |
+|-----------|-------|
+| Dataset | LOCOMO-10 (1,540 queries, excluding adversarial) |
+| Metric | Recall@5, MRR |
+| LLM calls | **0** |
+| Embedding model | BAAI/bge-m3 (MIT, 1024-dim) |
+| Reranker | bge-reranker-v2-m3, weight=0.5, top-N=20 |
+| Granularity | **Session-level + overlap chunking** |
+| LC_CHUNK_CHARS | 400 |
+| LC_OVERLAP_CHARS | 200 (50% overlap) |
+| LC_MIN_NOTE_CHARS | 300 |
+| Sessions | 269 sessions → 2,984 lc-chunk nodes |
+
+### Results (Experiment D1 — deployed to production)
+
+| Category | Queries | Hits | Recall@5 | MRR |
+|----------|---------|------|----------|-----|
+| **Overall** | **1,540** | **1,403** | **91.1%** | **0.830** |
+| single-hop | 282 | 241 | 85.5% | 0.695 |
+| multi-hop | 321 | 286 | 89.1% | 0.801 |
+| temporal | 96 | 64 | 66.7% | 0.547 |
+| open-domain | 841 | 812 | 96.6% | 0.919 |
+
+### Comparison Across All Configurations
+
+| Configuration | Recall@5 | MRR | Delta vs prev |
+|--------------|----------|-----|---------------|
+| Session-level (no chunking) | 32.6% | 0.223 | baseline |
+| Turn-level, MiniLM | 65.5% | 0.562 | +32.9pp |
+| Turn-level, BGE-M3 | 69.4% | 0.594 | +3.9pp |
+| **Session + overlap chunking (BGE-M3)** | **91.1%** | **0.830** | **+21.7pp** |
+
+**PCB v5 post-deploy: 97.5%** (Atomic 100% + Semantic 95%)
+
+### Parent Node Variants
+
+| Variant | Parent importance | In ANN | Recall@5 |
+|---------|------------------|--------|----------|
+| D1 | normal | yes | 91.1% |
+| D2 | low | yes | 91.1% |
+| D3a (chunks only) | none | — | ~0% (benchmark incompatible) |
+
+**Key finding:** Parent node importance does not affect results. D3a failed because LOCOMO benchmark matches against full session text — chunks contain only partial text, making exact matching impossible.
+
+### Key Findings
+1. **Session granularity + overlap chunking = +21.7pp** over turn-level BGE-M3
+2. **+58.5pp** over session-level without chunking — overlap is critical
+3. **Temporal +28.2pp** (38.5% → 66.7%) — largest category gain
+4. **Open-domain 96.6%** — near-ceiling retrieval
+5. ColBERT late chunking (Experiment C) rejected: 2-3 min/note on CPU, unacceptable for add_note latency
+6. Standard dense encode at 50ms/chunk achieves the same goal
+
+### Production Config (March 31, 2026)
+
+```
+EMBEDDING_MODEL=BAAI/bge-m3
+BLEND_ALPHA=0.7
+BLEND_GAMMA=0.15
+RERANK_ENABLED=true
+RERANK_MODEL=BAAI/bge-reranker-v2-m3
+RERANK_TOP_N=20
+RERANK_WEIGHT=0.5
+INHIBITION_STRENGTH=0.05
+LATE_CHUNKING_ENABLED=true
+LC_MIN_NOTE_CHARS=300
+LC_CHUNK_CHARS=400
+LC_OVERLAP_CHARS=200
+```

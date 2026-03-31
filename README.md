@@ -170,7 +170,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 ## 📊 Benchmarks
 
-### Retrieval — LOCOMO (78.7% benchmark config / 69.4% production config, zero LLM cost)
+### Retrieval — LOCOMO (91.1% production config, zero LLM cost)
 
 | Configuration | Recall@5 | MRR |
 |--------------|----------|-----|
@@ -182,7 +182,8 @@ HippoGraph treats memory the way it should be treated — with care.
 | **+ ANN top-K=5 (benchmark-optimized config)** | **78.7%** | **0.658** |
 | Production config (Mar 20 2026) — biol. edges + lateral inhibition | 47.9% | 0.362 |
 | Production config (Mar 28 2026) — + bge-reranker-v2-m3 + Late Stage Inhibition | 65.5% | 0.562 |
-| **Production config (Mar 28 2026)** — + BGE-M3 embedding | **69.4%** | **0.594** |
+| Production config (Mar 28 2026) — + BGE-M3 embedding | 69.4% | 0.594 |
+| **Production config (Mar 31 2026)** — + Overlap Chunking (session-level) | **91.1%** | **0.830** |
 
 > All results at **zero LLM inference cost**. Other systems use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
 
@@ -214,7 +215,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 LOCOMO tests retrieval over random multi-session conversations between strangers. HippoGraph is optimized for the opposite: deep associative memory over *your* data, with emotional weighting and decay tuned for personal context.
 
-> ⚠️ Two configs: benchmark-optimized (78.7%) and production (69.4%, Mar 28 2026). Production: 47.9% (Mar 20) → 65.5% (+17.6pp, reranker+inhibition) → 69.4% (+3.9pp, BGE-M3 embedding). Multi-hop: 74.5% — best ever.
+> Production track: 47.9% (Mar 20) → 65.5% (+17.6pp, reranker+inhibition) → 69.4% (+3.9pp, BGE-M3) → **91.1% (+21.7pp, overlap chunking)**. Temporal: 66.7% — best ever. Open-domain: 96.6%.
 
 Running LOCOMO on HippoGraph is like benchmarking a long-term relationship therapist on speed-dating recall. The architecture is different because the problem is different.
 
