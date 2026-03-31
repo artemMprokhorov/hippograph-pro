@@ -6,7 +6,7 @@ Implements spreading activation search and automatic linking
 
 import numpy as np
 import os
-from late_chunking import late_chunk_encode, LC_ENABLED
+from late_chunking import late_chunk_encode, LC_ENABLED, LC_PARENTLESS
 import math
 from datetime import datetime
 from typing import List, Dict, Any
@@ -404,6 +404,7 @@ def add_note_with_links(content, category="general", importance="normal", force=
             _lc_model = get_model()
             chunks = late_chunk_encode(content, _lc_model)
             chunk_node_ids = []
+            prev_chunk_id = None
             for ch in chunks:
                 # Inherit emotional context from parent note
                 ch_node_id = create_node(
@@ -417,12 +418,26 @@ def add_note_with_links(content, category="general", importance="normal", force=
                     tags=f'chunk-{ch["chunk_idx"]+1}-of-{ch["total_chunks"]} session-{category}'
                 )
                 ann_index.add_vector(ch_node_id, ch['embedding'])
-                create_edge(ch_node_id, node_id, weight=0.9, edge_type='PART_OF')
-                create_edge(node_id, ch_node_id, weight=0.9, edge_type='PART_OF')
+
+                if LC_PARENTLESS:
+                    # Experiment E: no PART_OF to parent.
+                    # Graph builds bonds organically via consolidation edges
+                    # on overlapping content (high cosine sim => dense edges).
+                    # Sequential NEXT_CHUNK edges preserve order explicitly.
+                    if prev_chunk_id is not None:
+                        create_edge(prev_chunk_id, ch_node_id, weight=0.85, edge_type='NEXT_CHUNK')
+                        create_edge(ch_node_id, prev_chunk_id, weight=0.85, edge_type='NEXT_CHUNK')
+                    prev_chunk_id = ch_node_id
+                else:
+                    # Experiment D (default): PART_OF to parent node
+                    create_edge(ch_node_id, node_id, weight=0.9, edge_type='PART_OF')
+                    create_edge(node_id, ch_node_id, weight=0.9, edge_type='PART_OF')
+
                 chunk_node_ids.append(ch_node_id)
             if chunk_node_ids:
                 result['late_chunks'] = len(chunk_node_ids)
-                print(f'📝 Overlap chunking: {len(chunk_node_ids)} chunks for note #{node_id}')
+                mode_label = 'parentless' if LC_PARENTLESS else 'parent'
+                print(f'[LC/{mode_label}] {len(chunk_node_ids)} chunks for note #{node_id}')
         except Exception as _lce:
             print(f'Late chunking skipped: {_lce}')
 

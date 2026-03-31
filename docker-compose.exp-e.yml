@@ -1,0 +1,65 @@
+# Experiment E: Parentless Overlap Chunking
+# Hypothesis: граф сам строит связность между чанками через consolidation edges.
+# Без родительских нод — только атомарные чанки с overlap.
+# Порт 5005 — не конфликтует с продом (5001) и locomo (5004)
+
+services:
+  hippograph-exp-e:
+    build: .
+    container_name: hippograph-exp-e
+    ports:
+      - "5005:5000"   # API
+      - "5006:5002"   # Web viewer
+    volumes:
+      - ./data/exp_e:/app/data
+      - ./src:/app/src
+      - ./web:/var/www/html
+      - ./benchmark:/app/benchmark
+    environment:
+      - DB_PATH=/app/data/exp_e_test.db
+      - FLASK_PORT=5000
+      - FLASK_DEBUG=false
+      - NEURAL_API_KEY=exp_e_key_2026
+
+      # Embedding — те же что в проде
+      - EMBEDDING_MODEL=BAAI/bge-m3
+      - ENTITY_EXTRACTOR=spacy
+
+      # Retrieval — те же что в проде
+      - BLEND_ALPHA=0.7
+      - BLEND_GAMMA=0.15
+      - RERANK_ENABLED=true
+      - RERANK_MODEL=BAAI/bge-reranker-v2-m3
+      - RERANK_TOP_N=20
+      - RERANK_WEIGHT=0.5
+      - INHIBITION_STRENGTH=0.05
+      - USE_ANN_INDEX=true
+      - ANN_INDEX_TYPE=HNSW
+      - HNSW_M=32
+      - HNSW_EF_CONSTRUCTION=64
+      - HNSW_EF_SEARCH=32
+      - ACTIVATION_ITERATIONS=3
+      - ACTIVATION_DECAY=0.7
+      - SIMILARITY_THRESHOLD=0.5
+      - HALF_LIFE_DAYS=30
+
+      # Overlap chunking — PARENTLESS mode (Experiment E)
+      - LATE_CHUNKING_ENABLED=true
+      - LC_MODE=parentless          # <-- ключевое отличие от D1
+      - LC_CHUNK_CHARS=400
+      - LC_OVERLAP_CHARS=200
+      - LC_MIN_NOTE_CHARS=300
+
+      # Sleep отключён — чистый бенчмарк
+      - SLEEP_ENABLED=false
+      - SLEEP_INTERVAL_HOURS=0
+      - SLEEP_NOTE_THRESHOLD=999999
+      - DEEP_SLEEP_ENABLED=false
+      - DISABLE_CATEGORY_DECAY=true
+
+    restart: "no"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

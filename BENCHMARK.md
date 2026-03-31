@@ -18,7 +18,7 @@ We report LOCOMO results for retrieval quality validation. For real-world perfor
 
 Evaluated on [LOCOMO](https://github.com/snap-research/locomo) — 10 multi-session conversations, 272 sessions, 5,882 turns, 1,986 QA pairs.
 
-**Key result: 78.7% Recall@5 (benchmark-optimized config) / 47.9% (production config) at zero LLM infrastructure cost. Graph scale: 100,356 edges, emergence score 0.629.**
+**Key result: 91.1% Recall@5 (production config, Mar 31 2026) / 78.7% (benchmark-optimized config) at zero LLM infrastructure cost. Graph scale: 100,356 edges, emergence score 0.629.**
 
 ### Best Configuration
 
@@ -212,17 +212,49 @@ Script:
 
 ## Reproduce
 
+### Production config (Mar 31 2026) — 91.1% Recall@5
+
 ```bash
-# 1. Start isolated benchmark container (optimal config)
+# 1. Start isolated container — production config with overlap chunking
+docker-compose -f docker-compose.exp-e.yml up -d --build
+# (or create a locomo variant with LATE_CHUNKING_ENABLED=true, LC_MODE=parent)
+
+# 2. Load dataset and run evaluation (session granularity)
+python3 benchmark/locomo_adapter.py --all \
+  --api-url http://localhost:5005 \
+  --api-key exp_e_key_2026 \
+  --granularity session
+
+# Results saved to benchmark/results/locomo_results.json
+```
+
+Key env vars for production config:
+```
+EMBEDDING_MODEL=BAAI/bge-m3
+DISABLE_CATEGORY_DECAY=true
+RERANK_WEIGHT=0.5
+RERANK_TOP_N=20
+INHIBITION_STRENGTH=0.05
+BLEND_ALPHA=0.7
+BLEND_GAMMA=0.15
+LATE_CHUNKING_ENABLED=true
+LC_MODE=parent
+LC_CHUNK_CHARS=400
+LC_OVERLAP_CHARS=200
+LC_MIN_NOTE_CHARS=300
+```
+
+### Benchmark-optimized config — 78.7% Recall@5
+
+```bash
+# 1. Start isolated benchmark container
 docker-compose -f docker-compose.locomo.yml up -d --build
 
 # 2. Load dataset and run evaluation (hybrid granularity)
 python3 benchmark/locomo_adapter.py --all \
-  --api-url http://localhost:5003 \
+  --api-url http://localhost:5004 \
   --api-key benchmark_key_locomo_2026 \
   --granularity hybrid
-
-# Results saved to benchmark/results/locomo_results.json
 ```
 
 Key env vars in `docker-compose.locomo.yml`:

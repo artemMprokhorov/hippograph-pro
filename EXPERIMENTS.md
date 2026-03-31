@@ -137,9 +137,9 @@ Critically: this happens at **every `add_note` call**, not just during initial i
 
 ---
 
-*Last updated: March 29, 2026*
-*Production stack: BGE-M3 (1024-dim) + BM25 + Spreading Activation + bge-reranker-v2-m3*
-*Current benchmark: PCB v5 = 100%, LOCOMO Recall@5 = 69.4%*---
+*Last updated: March 31, 2026*
+*Production stack: BGE-M3 (1024-dim) + BM25 + Spreading Activation + bge-reranker-v2-m3 + Overlap Chunking (session-level)*
+*Current benchmark: PCB v5 = 97.5% (post-deploy), LOCOMO Recall@5 = 91.1%*---
 
 ## Experiment D: Overlap Chunking — Session Granularity (March 30 2026)
 
@@ -180,3 +180,32 @@ LOCOMO QA pairs reference full session content. Chunks contain only 400-char win
 - Parent nodes are architecturally harmless and practically useful
 - ColBERT (Experiment C) was the right idea but wrong execution for CPU
 - Standard dense encode + overlap achieves the goal at 50ms/chunk vs 2-3min/chunk
+---
+
+## Experiment E: Parentless Overlap Chunking (March 31 2026)
+
+**Hypothesis:** The parent note (session-level) is redundant. The graph itself acts as the organism — atomic chunk nodes form clusters organically via consolidation edges built on overlapping content. High cosine similarity between adjacent overlapping chunks => dense inter-chunk edges => tight clusters. No PART_OF hierarchy needed.
+
+**Biological analogy:** Non-coding ("junk") DNA overlap — shared sequence between adjacent segments creates structural redundancy that strengthens bonds and improves signal propagation. In HippoGraph: overlap text => high embedding similarity => stronger consolidation edges => more directed spreading activation.
+
+**Architecture difference from D1:**
+
+| | D1 (production) | E (parentless) |
+|---|---|---|
+| Parent node | ✅ session note | ❌ none |
+| Chunk→parent edge | PART_OF (0.9) | — |
+| Chunk→chunk edge | via consolidation | NEXT_CHUNK (0.85) + consolidation |
+| Cluster formation | explicit hierarchy | organic via cosine sim |
+
+**Setup:**
+- Container: `hippograph-exp-e` (port 5005)
+- `LC_MODE=parentless`, `LC_CHUNK_CHARS=400`, `LC_OVERLAP_CHARS=200`
+- NEXT_CHUNK edges between sequential chunks (weight 0.85)
+- Same BGE-M3 + reranker stack as D1
+- Session granularity
+
+**Status:** IN PROGRESS — awaiting Docker startup
+
+**Expected outcome:**
+- If Recall@5 >= 91.1%: parent node is redundant, graph self-organizes
+- If Recall@5 < 91.1%: PART_OF edges carry signal that consolidation cannot replace

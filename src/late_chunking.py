@@ -1,14 +1,17 @@
 """
-Late Chunking for HippoGraph — Experiment D (March 2026)
+Late Chunking for HippoGraph
 
-Overlap chunking with standard dense encode.
+Experiment D (March 2026): Overlap chunking with PART_OF edges to parent.
+  LC_MODE=parent (default) -- D1 production config, 91.1% LOCOMO
+
+Experiment E (March 2026): Parentless mode -- no parent node.
+  LC_MODE=parentless
+  Hypothesis: graph builds inter-chunk connectivity organically via
+  consolidation edges. Overlap content => high cosine similarity =>
+  dense edges between adjacent chunks => tighter clusters.
+  Analogy: junk DNA overlap -- redundancy strengthens structural bonds.
+
 No ColBERT, no GPU required. ~50ms per chunk.
-
-Strategy:
-- Split long notes into sentence-aware chunks
-- 50% token overlap between chunks (context preservation)
-- Each chunk encoded with standard model.encode()
-- PART_OF edges link chunks to parent note
 """
 
 import os
@@ -17,9 +20,12 @@ import numpy as np
 from typing import List, Dict
 
 LC_ENABLED = os.environ.get('LATE_CHUNKING_ENABLED', 'false').lower() == 'true'
-LC_CHUNK_CHARS = int(os.environ.get('LC_CHUNK_CHARS', '400'))   # chars per chunk
-LC_OVERLAP_CHARS = int(os.environ.get('LC_OVERLAP_CHARS', '200'))  # overlap chars (~50%)
-LC_MIN_NOTE_CHARS = int(os.environ.get('LC_MIN_NOTE_CHARS', '600'))  # min to chunk
+LC_MODE    = os.environ.get('LC_MODE', 'parent')   # 'parent' | 'parentless'
+LC_CHUNK_CHARS   = int(os.environ.get('LC_CHUNK_CHARS', '400'))
+LC_OVERLAP_CHARS = int(os.environ.get('LC_OVERLAP_CHARS', '200'))
+LC_MIN_NOTE_CHARS = int(os.environ.get('LC_MIN_NOTE_CHARS', '300'))
+
+LC_PARENTLESS = LC_MODE == 'parentless'
 
 
 def split_into_sentences(text: str) -> List[str]:
@@ -32,6 +38,11 @@ def build_overlap_chunks(text: str, chunk_chars: int, overlap_chars: int) -> Lis
     """
     Build overlapping chunks from text, respecting sentence boundaries.
     Each chunk is ~chunk_chars long with ~overlap_chars overlap with next chunk.
+
+    Overlap analogy (Experiment E):
+    Like non-coding DNA -- shared sequence between adjacent chunks
+    creates structural redundancy that strengthens inter-chunk bonds
+    when consolidation edges are built by cosine similarity.
     """
     sentences = split_into_sentences(text)
     if not sentences:
@@ -64,7 +75,6 @@ def build_overlap_chunks(text: str, chunk_chars: int, overlap_chars: int) -> Lis
     # Add remaining
     if current:
         remaining = ' '.join(current)
-        # Only add if meaningfully different from last chunk
         if not chunks or remaining != chunks[-1]:
             chunks.append(remaining)
 
@@ -75,8 +85,9 @@ def late_chunk_encode(content: str, model) -> List[Dict]:
     """
     Overlap chunking with standard dense encode.
 
-    Fast (~50ms per chunk), works on CPU, no ColBERT needed.
-    Context preserved through sentence overlap between chunks.
+    MODE=parent (D1):     chunks + PART_OF -> parent node. LOCOMO 91.1%.
+    MODE=parentless (E):  chunks only, no parent. Graph builds bonds
+                          organically via consolidation edges on overlap.
 
     Returns list of {text, embedding, chunk_idx, total_chunks}
     or empty list if disabled / content too short.
@@ -91,14 +102,12 @@ def late_chunk_encode(content: str, model) -> List[Dict]:
         chunk_texts = build_overlap_chunks(content, LC_CHUNK_CHARS, LC_OVERLAP_CHARS)
 
         if len(chunk_texts) < 2:
-            return []  # No benefit from chunking
+            return []
 
-        # Encode all chunks in one batch call
         embeddings = model.encode(chunk_texts)
 
         chunks = []
         for i, (text, emb) in enumerate(zip(chunk_texts, embeddings)):
-            # Normalize
             norm = np.linalg.norm(emb)
             if norm > 0:
                 emb = emb / norm
@@ -109,7 +118,8 @@ def late_chunk_encode(content: str, model) -> List[Dict]:
                 'total_chunks': len(chunk_texts),
             })
 
-        print(f'📝 Overlap chunking: {len(chunks)} chunks for note ({len(content)} chars)')
+        mode_label = 'parentless' if LC_PARENTLESS else 'parent'
+        print(f'[LC/{mode_label}] {len(chunks)} chunks ({len(content)} chars)')
         return chunks
 
     except Exception as e:
