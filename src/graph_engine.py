@@ -6,6 +6,7 @@ Implements spreading activation search and automatic linking
 
 import numpy as np
 import os
+from late_chunking import late_chunk_encode, LC_ENABLED
 import math
 from datetime import datetime
 from typing import List, Dict, Any
@@ -396,6 +397,31 @@ def add_note_with_links(content, category="general", importance="normal", force=
     if _os.getenv('ONLINE_CONSOLIDATION', 'true').lower() == 'true':
         consolidation_links = _mini_consolidate(node_id)
         result['consolidation_links'] = consolidation_links
+
+    # --- LATE CHUNKING (Experiment D) ---
+    if LC_ENABLED:
+        try:
+            _lc_model = get_model()
+            chunks = late_chunk_encode(content, _lc_model)
+            chunk_node_ids = []
+            for ch in chunks:
+                ch_node_id = create_node(
+                    ch['text'],
+                    'lc-chunk',
+                    ch['embedding'].tobytes(),
+                    'low',
+                    None, 5, None,
+                    tags=f'chunk-{ch["chunk_idx"]+1}-of-{ch["total_chunks"]} session-{category}'
+                )
+                ann_index.add_vector(ch_node_id, ch['embedding'])
+                create_edge(ch_node_id, node_id, weight=0.9, edge_type='PART_OF')
+                create_edge(node_id, ch_node_id, weight=0.9, edge_type='PART_OF')
+                chunk_node_ids.append(ch_node_id)
+            if chunk_node_ids:
+                result['late_chunks'] = len(chunk_node_ids)
+                print(f'📝 Overlap chunking: {len(chunk_node_ids)} chunks for note #{node_id}')
+        except Exception as _lce:
+            print(f'Late chunking skipped: {_lce}')
 
     return result
 
