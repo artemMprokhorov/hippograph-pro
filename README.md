@@ -197,7 +197,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 > GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
 
-### Personal Continuity — Real Data (87.5% Recall@5, Identity 100%)
+### Personal Continuity — Real Data (100% Recall@5, PCB v5)
 
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
@@ -337,6 +337,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **Temporal Filtering (dateparser)** | ✅ Deployed | Natural language time queries: "last week", "на прошлой неделе", "yesterday" auto-convert to time filters |
 | **Synonym Normalization** | ✅ Deployed | Abbreviation + cross-lingual expansion: 50+ pairs EN/RU/ES/DE/FR/PT; search-time `normalize_query()` maps any language to canonical EN form |
 | **Multilingual (50+ languages)** | ✅ Deployed | Full retrieval + associations in any language; EN/RU/DE/ES/FR/PT contradiction patterns |
+| **Multilingual sentence splitting** | ✅ Deployed | `split_into_sentences` with placeholder protection for EN/RU/ES/DE/FR/IT abbreviations (Dr, Sr, Hr, Mme, etc.), decimal numbers (91.1, 0.830), version strings (v2.1, E1), hyphenated identifiers (bge-reranker-v2-m3). All 15 test cases pass. |
 | Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
@@ -346,7 +347,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **Evolution Analyzer (#45)** | ✅ Deployed | `evolution_analyzer.py` — periodic graph evolution analysis across snapshot DBs. Tracks nodes/edges/emergence/edge-types over time. |
 | **Abstract Topic Linking (#47)** | ✅ Deployed | `step_topic_linking_tfidf()` + `step_topic_linking_kmeans()` in sleep cycle. 76 topic nodes, 1858 BELONGS_TO edges. global_workspace: 0.412→0.647 (+0.235). |
 | **Consciousness Check (#48)** | ✅ Deployed | `consciousness_check.py` — 8 indicators from Butlin et al. 2023, IIT, GWT, Damasio. Composite: **0.736** (MODERATE). Bottleneck: emotional_modulation (0.237). |
-| Personal Continuity Benchmark | ✅ v4 | **87.5% Recall@5** (32 questions, keyword-based). Identity 100%, History 100%, Science 100%, Security 100%, Session 100%. Multi-model validation: 10 model instances across Anthropic + Google. |
+| Personal Continuity Benchmark | ✅ v5 | **100% Recall@5** (full base, retroactive chunking, April 2026). PCB v5: Atomic Facts 15/15, Semantic 20/20. Prior: 87.5% (v4, 32 questions). Multi-model validation: 10 model instances across Anthropic + Google. |
 
 ---
 

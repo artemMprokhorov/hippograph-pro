@@ -717,6 +717,8 @@ Replaced turn-level granularity with session-level + overlap chunking:
 
 **PCB v5 post-deploy: 97.5%** (Atomic 100% + Semantic 95%)
 
+**PCB v5 full base (after retroactive chunking, April 1 2026): 100%** (Atomic 100% + Semantic 100%) — 550 notes rechunked, 1349 new lc-chunk nodes added.
+
 ### Parent Node Variants
 
 | Variant | Parent importance | In ANN | Recall@5 |

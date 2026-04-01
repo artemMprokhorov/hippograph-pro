@@ -182,30 +182,28 @@ LOCOMO QA pairs reference full session content. Chunks contain only 400-char win
 - Standard dense encode + overlap achieves the goal at 50ms/chunk vs 2-3min/chunk
 ---
 
-## Experiment E: Parentless Overlap Chunking (March 31 2026)
+## Experiment E: Parentless Overlap Chunking — Series (March 31 — April 1 2026)
 
-**Hypothesis:** The parent note (session-level) is redundant. The graph itself acts as the organism — atomic chunk nodes form clusters organically via consolidation edges built on overlapping content. High cosine similarity between adjacent overlapping chunks => dense inter-chunk edges => tight clusters. No PART_OF hierarchy needed.
+**Research direction:** Can the parent node be eliminated? Does the graph self-organize through overlap and consolidation edges alone?
 
-**Biological analogy:** Non-coding ("junk") DNA overlap — shared sequence between adjacent segments creates structural redundancy that strengthens bonds and improves signal propagation. In HippoGraph: overlap text => high embedding similarity => stronger consolidation edges => more directed spreading activation.
+**This is v3 research territory.** Results informed the v3 architecture roadmap. Not deployed to v2 production.
 
-**Architecture difference from D1:**
+**Summary of findings:**
 
-| | D1 (production) | E (parentless) |
-|---|---|---|
-| Parent node | ✅ session note | ❌ none |
-| Chunk→parent edge | PART_OF (0.9) | — |
-| Chunk→chunk edge | via consolidation | NEXT_CHUNK (0.85) + consolidation |
-| Cluster formation | explicit hierarchy | organic via cosine sim |
+| Config | LOCOMO Recall@5 | Note |
+|--------|-----------------|------|
+| D1 (parent+chunks) | 91.1% | v2 production |
+| E1 (parentless) | 89.7% | -1.4pp — graph builds connectivity organically |
+| E2 (uroboros structural) | 86.6% | circular NEXT_CHUNK edge hurts |
+| E3 (uroboros semantic) | 86.4% | semantic ring also hurts |
 
-**Setup:**
-- Container: `hippograph-exp-e` (port 5005)
-- `LC_MODE=parentless`, `LC_CHUNK_CHARS=400`, `LC_OVERLAP_CHARS=200`
-- NEXT_CHUNK edges between sequential chunks (weight 0.85)
-- Same BGE-M3 + reranker stack as D1
-- Session granularity
+**Key findings:**
+- Parentless (E1) comes within 1.4pp of production D1 — consolidation edges on overlapping content provide most of the missing signal
+- Circular edges (E2, E3) consistently hurt retrieval — both on LOCOMO and personal data
+- Gap D1→E1 is explained by spreading activation not yet understanding NEXT_CHUNK as a directed reinforcing signal — this is the primary v3 priority
+- Consolidation is critical: without it E1 drops to 85.6% (-4.1pp)
 
-**Status:** IN PROGRESS — awaiting Docker startup
+**What this means for v3:**
+The parent node is an explicit hierarchy — an architectural shortcut. E1 shows the graph can nearly replace it organically. With chunk-aware spreading activation E1 should match or exceed D1. Full results and roadmap in v3 codebase.
 
-**Expected outcome:**
-- If Recall@5 >= 91.1%: parent node is redundant, graph self-organizes
-- If Recall@5 < 91.1%: PART_OF edges carry signal that consolidation cannot replace
+*Last updated: April 1, 2026*
