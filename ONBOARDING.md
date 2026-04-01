@@ -30,7 +30,7 @@ Key:  <your NEURAL_API_KEY from .env>
 
 For remote access (mobile, other devices) see [MCP_CONNECTION.md](MCP_CONNECTION.md).
 
-Once connected, Claude will have access to 8 memory tools: save notes, search memories, see connections between ideas, and more.
+Once connected, Claude will have access to 19 memory tools: save notes, search memories, manage entities, run graph maintenance, and more. See [MCP_CONNECTION.md](MCP_CONNECTION.md) for the full list.
 
 ---
 

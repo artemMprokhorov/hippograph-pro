@@ -30,7 +30,7 @@ See [SECURITY.md](SECURITY.md) for key management best practices.
 
 ---
 
-## Available MCP Tools (18)
+## Available MCP Tools (19)
 
 ### Memory — Read
 
@@ -50,6 +50,7 @@ See [SECURITY.md](SECURITY.md) for key management best practices.
 | `update_note` | Update existing note content by ID. Saves previous version to history (up to 5). |
 | `delete_note` | Delete a note by ID. Removes all associated edges. |
 | `set_importance` | Set note importance: `critical` (2× retrieval boost), `normal`, or `low` (0.5×). |
+| `update_working_memory` | Overwrite current session context (category: working-memory). Call after decisions, task completions, or direction changes. Loads automatically at session start. |
 
 ### Memory — History
 
