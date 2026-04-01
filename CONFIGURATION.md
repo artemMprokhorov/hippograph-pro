@@ -1,8 +1,6 @@
 # HippoGraph Pro — Configuration Guide
 
-HippoGraph ships with defaults tuned for **personal AI memory** — an agent that knows you, remembers your history, and builds relational context over time. But the same system can be tuned for very different use cases by adjusting a handful of parameters in your `.env` file.
-
-This guide explains what each tuning dial does, what you gain, what you give up, and which profile fits your use case.
+HippoGraph ships with defaults tuned for **personal AI memory** — an agent that knows you, remembers your history, and builds relational context over time. The same system can be tuned for different use cases by adjusting parameters in your `.env` file.
 
 ---
 
@@ -10,155 +8,157 @@ This guide explains what each tuning dial does, what you gain, what you give up,
 
 ### Profile 1 — Personal AI Memory (default)
 
-The agent knows *you*. It remembers what you've discussed, how you work, what matters to you. Emotional weighting means a note about a critical security incident stays prominent; a note about a minor detail fades. Spreading activation surfaces connections you didn't explicitly ask for — the way human memory does.
+The agent knows *you*. It remembers what you’ve discussed, how you work, what matters to you. Spreading activation surfaces connections you didn’t explicitly ask for.
 
 **Best for:** Personal assistant, AI identity continuity, long-term AI-user relationship.
 
 ```env
-# .env — Personal Memory (default, no changes needed)
-DECAY_ENABLED=true
-DECAY_HALF_LIFE_DAYS=30
-RERANK_WEIGHT=0.3
-ANN_TOP_K=15
-BLEND_ALPHA=0.6
-BLEND_BETA=0.25
+# Personal Memory (default — no changes needed)
+EMBEDDING_MODEL=sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+ENTITY_EXTRACTOR=gliner
+BLEND_ALPHA=0.7
 BLEND_GAMMA=0.15
-EMOTIONAL_WEIGHT=true
+RERANK_ENABLED=true
+RERANK_WEIGHT=0.5
+RERANK_TOP_N=20
+INHIBITION_STRENGTH=0.05
+HALF_LIFE_DAYS=30
+LATE_CHUNKING_ENABLED=true
+LC_MODE=parent
 ```
 
 **What you get:**
-- Memory fades naturally — important stays prominent, trivial fades
+- Temporal decay — important memories stay prominent, trivial ones fade
 - Associative retrieval — related memories surface without explicit query
-- Emotional context shapes what's retrieved and how
+- Overlap chunking — long notes split into overlapping chunks for fine-grained recall
 - Identity continuity across sessions and model versions
 
 **What you give up:**
-- Slightly lower precision on specific factual queries
-- Older notes may surface less often even if still relevant
+- Slightly lower precision on specific factual queries vs benchmark-optimized config
 
 ---
 
 ### Profile 2 — Project Memory (pure task focus)
 
-The agent knows your *project*, not you. No emotional weighting, no personal history, no relational context. Retrieval is optimized for precision: you ask a specific question, you get the most relevant documents. Closer to RAG than to memory.
+The agent knows your *project*, not you. Optimized for precision: specific question → most relevant document.
 
-**Best for:** Project knowledge base, technical documentation assistant, team onboarding, research context — any scenario where the agent needs to know the work, not the person.
+**Best for:** Project knowledge base, technical documentation assistant, research context.
 
 ```env
-# .env — Project Memory
-DECAY_ENABLED=false
-RERANK_WEIGHT=0.8
-ANN_TOP_K=5
+# Project Memory
 BLEND_ALPHA=0.5
-BLEND_BETA=0.35
 BLEND_GAMMA=0.15
-EMOTIONAL_WEIGHT=false
+RERANK_ENABLED=true
+RERANK_WEIGHT=0.8
+RERANK_TOP_N=5
+INHIBITION_STRENGTH=0.05
+HALF_LIFE_DAYS=36500
+# effectively disables decay (100 years)
+DISABLE_CATEGORY_DECAY=true
 ```
 
 **What you get:**
 - Higher retrieval precision — exact answers to specific questions
-- Nothing fades — all project knowledge stays equally accessible
-- No personal or emotional noise in results
+- Notes don’t fade — all project knowledge stays equally accessible
 - Benchmark-validated: 78.7% Recall@5 on LOCOMO with this config
 
 **What you give up:**
-- No associative retrieval — the agent won't surface unexpected connections
-- No relational context — the agent doesn't build a model of you over time
-- No memory of *why* decisions were made, only *what* was decided
+- No emotional context or personal history
+- No associative “unexpected connection” surfacing
 
 ---
 
-### Profile 3 — Hybrid (work context + minimal personal layer)
+### Profile 3 — Hybrid (work context + thin personal layer)
 
-The agent knows the project and has a thin model of who you are — enough to adapt communication style and remember key decisions you've made, but without building a deep personal relationship. Decay is slow rather than off; emotional weighting is minimal.
+The agent knows the project and has a light model of who you are.
 
-**Best for:** Work assistant where some personal context is useful but the primary focus is task execution. The agent remembers you made a specific architectural decision and why, but doesn't build emotional weight around it.
+**Best for:** Work assistant where some personal context is useful but task execution is primary.
 
 ```env
-# .env — Hybrid
-DECAY_ENABLED=true
-DECAY_HALF_LIFE_DAYS=90
-RERANK_WEIGHT=0.6
-ANN_TOP_K=10
-BLEND_ALPHA=0.55
-BLEND_BETA=0.30
+# Hybrid
+BLEND_ALPHA=0.6
 BLEND_GAMMA=0.15
-EMOTIONAL_WEIGHT=false
+RERANK_ENABLED=true
+RERANK_WEIGHT=0.6
+RERANK_TOP_N=10
+INHIBITION_STRENGTH=0.05
+HALF_LIFE_DAYS=90
 ```
-
-**What you get:**
-- Good precision on task-specific queries
-- Slow decay — old decisions stay accessible for months
-- Minimal personal noise
-- Associative retrieval still active but less dominant
-
-**What you give up:**
-- Less associative richness than Personal profile
-- Less precision than pure Project profile
-- Middle ground means neither strength is fully realized
 
 ---
 
 ## Parameter Reference
 
-### Decay
+### Retrieval — Blend Weights
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `DECAY_ENABLED` | `true` | Whether memory edges weaken over time. `false` = all notes equally accessible forever. |
-| `DECAY_HALF_LIFE_DAYS` | `30` | How fast edges decay. 30 days = a note from a month ago has half the edge weight of a fresh note. Increase for slower forgetting. |
-| `DISABLE_CATEGORY_DECAY` | `false` | Override: disable decay for protected anchor categories regardless of `DECAY_ENABLED`. Always `true` in benchmark runs. |
-
-**Cost/Profit:**
-- Decay ON → more natural memory behavior, important stays prominent, but older valid knowledge may surface less
-- Decay OFF → everything equally accessible, higher precision on direct queries, no forgetting
-- For project memory: **decay OFF**. For personal memory: **decay ON**.
-
----
-
-### Retrieval Precision
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `RERANK_WEIGHT` | `0.3` | How much the cross-encoder reranker influences final ranking. Range: 0.0–1.0. Higher = reranker dominates over blend score. |
-| `ANN_TOP_K` | `15` | Candidate pool size before reranking. Lower = reranker works on a tighter, more precise set. Higher = broader recall before reranking. |
-
-**Cost/Profit:**
-- High `RERANK_WEIGHT` (0.7–0.9) + low `ANN_TOP_K` (5–10) → maximum precision, best for specific factual queries. Benchmark-optimal: 78.7% Recall@5.
-- Low `RERANK_WEIGHT` (0.2–0.4) + high `ANN_TOP_K` (15–20) → broader associative recall, better for open-ended context retrieval.
-- Reranking adds ~50–150ms latency. At `RERANK_WEIGHT=0.0` the reranker is effectively disabled.
-
----
-
-### Blend Weights
-
-The retrieval pipeline combines three signals. The blend weights control their relative contribution.
+The pipeline combines three signals. Their weights control relative contribution.
 
 | Parameter | Default | Signal | Description |
 |-----------|---------|--------|-------------|
-| `BLEND_ALPHA` | `0.6` | Semantic | Pure embedding similarity. How close the query is to the note in vector space. |
-| `BLEND_BETA` | `0.25` | Spreading activation | Graph-based associative score. How connected the note is to other activated nodes. |
-| `BLEND_GAMMA` | `0.15` | BM25 | Keyword overlap. Exact term matching. |
+| `BLEND_ALPHA` | `0.7` | Semantic | Pure embedding similarity. How close query is to note in vector space. |
+| `BLEND_GAMMA` | `0.15` | BM25 | Keyword overlap. Exact term matching. Spreading activation gets remainder (1-α-γ). |
 
-> α + β + γ should sum to 1.0.
+> Spreading activation weight = `1 - BLEND_ALPHA - BLEND_GAMMA`. Default: 0.15.
 
 **Cost/Profit:**
 - Higher `BLEND_ALPHA` → more direct semantic matching, less associative
-- Higher `BLEND_BETA` → more associative retrieval, related memories surface even without explicit query terms — core of HippoGraph's value for personal memory
-- Higher `BLEND_GAMMA` → better exact-term recall, useful when queries use specific technical terms
-- For project memory: increase α, decrease β. For personal memory: keep β high.
+- Higher `BLEND_GAMMA` → better exact-term recall (technical terms, identifiers)
+- For project memory: increase α, decrease γ. For personal memory: keep defaults.
 
 ---
 
-### Emotional Weighting
+### Retrieval — Reranking
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `EMOTIONAL_WEIGHT` | `true` | Whether emotional intensity scores influence retrieval ranking. High-intensity notes get a small boost. |
+| `RERANK_ENABLED` | `true` | Enable cross-encoder reranking (+precision, ~100ms latency). |
+| `RERANK_MODEL` | `BAAI/bge-reranker-v2-m3` | Cross-encoder model. Apache 2.0. |
+| `RERANK_WEIGHT` | `0.5` | How much reranker influences final ranking (0.0–1.0). Higher = reranker dominates. |
+| `RERANK_TOP_N` | `20` | Candidate pool size for reranking. Lower = tighter, more precise set. |
 
 **Cost/Profit:**
-- ON → emotionally significant events stay more accessible. Useful for personal memory where importance correlates with emotional weight.
-- OFF → purely content-based retrieval. Recommended for project memory where emotional metadata is noise.
+- High `RERANK_WEIGHT` (0.7–0.9) + low `RERANK_TOP_N` (5–10) → maximum precision, best for factual queries
+- Low `RERANK_WEIGHT` (0.3–0.4) + high `RERANK_TOP_N` (15–20) → broader associative recall
+- Reranking adds ~50–150ms. `RERANK_ENABLED=false` disables it entirely.
+
+---
+
+### Retrieval — Spreading Activation
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `ACTIVATION_ITERATIONS` | `3` | Spreading activation iterations. More = deeper graph traversal. |
+| `ACTIVATION_DECAY` | `0.7` | Activation decay per hop. Lower = faster falloff. |
+| `INHIBITION_STRENGTH` | `0.05` | Lateral inhibition strength — suppresses weaker nodes within each community. 0 = off. |
+
+---
+
+### Memory Decay
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `HALF_LIFE_DAYS` | `30` | How fast edge weights decay. 30 days = note from a month ago has half the edge weight. Increase for slower forgetting. |
+| `DISABLE_CATEGORY_DECAY` | `false` | Override: disable decay for protected anchor categories. Always `true` in benchmark runs. |
+
+**Cost/Profit:**
+- Short half-life → natural memory behavior, important stays prominent, old knowledge fades
+- Long half-life / disable → everything equally accessible, higher precision on direct queries
+- For project memory: set `HALF_LIFE_DAYS=36500` (effectively off)
+- For personal memory: keep default 30 days
+
+---
+
+### Late Chunking (Overlap Chunking)
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `LATE_CHUNKING_ENABLED` | `false` | Enable overlap chunking for long notes. Strongly recommended — +21.7pp LOCOMO. |
+| `LC_MODE` | `parent` | Chunking mode. `parent` = D1 production config (chunks + parent note). |
+| `LC_CHUNK_CHARS` | `400` | Target chunk size in characters. |
+| `LC_OVERLAP_CHARS` | `200` | Overlap between adjacent chunks (50%). |
+| `LC_MIN_NOTE_CHARS` | `300` | Minimum note length to trigger chunking. |
+
+> ⚠️ Enable this. `LATE_CHUNKING_ENABLED=true` + `LC_MODE=parent` is the production config that achieves 91.1% LOCOMO Recall@5.
 
 ---
 
@@ -166,12 +166,44 @@ The retrieval pipeline combines three signals. The blend weights control their r
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `ENTITY_EXTRACTOR` | `gliner` | Entity extraction model. `gliner` = GLiNER (higher quality, ~250ms, 600MB RAM). `spacy` = spaCy (faster, ~10ms, lower RAM). |
+| `ENTITY_EXTRACTOR` | `gliner` | Entity extraction model. `gliner` = GLiNER (~250ms, 600MB RAM, best quality). `spacy` = fast (~10ms, ~80MB). `regex` = minimal. |
+| `GLINER_MODEL` | `urchade/gliner_multi-v2.1` | GLiNER model variant. |
+| `GLINER_THRESHOLD` | `0.4` | Confidence threshold for GLiNER entity detection. |
 
 **Cost/Profit:**
-- `gliner` → richer entity graph, better spreading activation, higher RAM
-- `spacy` → minimal hardware, faster ingestion, less rich graph connections
-- For minimal hardware (4GB RAM): use `spacy`
+- `gliner` → richer entity graph, better spreading activation, requires 8GB+ RAM
+- `spacy` → minimal hardware (4GB RAM), faster ingestion, less rich graph
+- For minimal hardware: `ENTITY_EXTRACTOR=spacy`
+
+---
+
+### Embedding Model
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `EMBEDDING_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Sentence-transformer model for vector search. |
+
+**Model options (from lightest to heaviest):**
+
+| Model | Dims | RAM | Languages | Notes |
+|-------|------|-----|-----------|-------|
+| `all-MiniLM-L6-v2` | 384 | ~80MB | English only | Minimal hardware |
+| `paraphrase-multilingual-MiniLM-L12-v2` | 384 | ~120MB | 50+ | **Default — good balance** |
+| `BAAI/bge-m3` | 1024 | ~2.2GB | 100+ | **Production quality — 91.1% LOCOMO** |
+
+> ⚠️ Changing `EMBEDDING_MODEL` requires re-indexing all notes:
+> ```bash
+> docker exec hippograph python3 src/reindex_embeddings.py
+> ```
+
+---
+
+### Sleep-Time Compute
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `SLEEP_INTERVAL_HOURS` | `6` | Run sleep_compute every N hours. 0 = disabled. |
+| `SLEEP_NOTE_THRESHOLD` | `50` | Also trigger after N new notes added. 0 = disabled. |
 
 ---
 
@@ -180,21 +212,23 @@ The retrieval pipeline combines three signals. The blend weights control their r
 ```
 I want the agent to know ME over time
     → Profile 1 (Personal Memory, default)
+    LATE_CHUNKING_ENABLED=true, LC_MODE=parent
 
 I want the agent to know my PROJECT / codebase / docs
     → Profile 2 (Project Memory)
-      DECAY_ENABLED=false, RERANK_WEIGHT=0.8, ANN_TOP_K=5
+    RERANK_WEIGHT=0.8, RERANK_TOP_N=5, HALF_LIFE_DAYS=36500
 
 I want work context + light personal layer
     → Profile 3 (Hybrid)
-      DECAY_HALF_LIFE_DAYS=90, RERANK_WEIGHT=0.6
+    HALF_LIFE_DAYS=90, RERANK_WEIGHT=0.6
 
-I'm running on minimal hardware (4GB RAM)
-    → Any profile + ENTITY_EXTRACTOR=spacy
+I’m running on minimal hardware (4GB RAM)
+    → Any profile + ENTITY_EXTRACTOR=spacy + EMBEDDING_MODEL=all-MiniLM-L6-v2
+    Leave RERANK_ENABLED=false (saves ~500MB RAM)
 
 I want maximum retrieval precision (benchmark mode)
-    → RERANK_WEIGHT=0.8, ANN_TOP_K=5, DECAY_ENABLED=false
-      (This is the benchmark-validated config: 78.7% Recall@5)
+    → RERANK_WEIGHT=0.8, RERANK_TOP_N=5, HALF_LIFE_DAYS=36500
+    EMBEDDING_MODEL=BAAI/bge-m3 (78.7% Recall@5 with MiniLM, ~91% with BGE-M3)
 ```
 
 ---
@@ -212,16 +246,15 @@ docker-compose down && docker-compose up -d
 
 ---
 
-## What Doesn't Change Between Profiles
+## What Doesn’t Change Between Profiles
 
-These behaviors are architectural — they don't change regardless of configuration:
-
-- **No automatic deletion** — notes are never silently removed. Decay weakens edges, it doesn't delete nodes.
-- **Anchor protection** — `self-reflection`, `protocol`, `security`, `milestone`, and other protected categories never decay, regardless of `DECAY_ENABLED`.
+- **No automatic deletion** — notes are never silently removed. Decay weakens edges, never deletes nodes.
+- **Anchor protection** — `self-reflection`, `protocol`, `security`, `milestone` and other protected categories never decay.
 - **Zero LLM cost** — all retrieval runs locally. No API calls required regardless of profile.
 - **Single user** — HippoGraph is not multi-tenant. All profiles assume one user, one knowledge base.
 
 ---
 
-*For full benchmark results and methodology, see [BENCHMARK.md](BENCHMARK.md).*
-*For setup and MCP connection, see [ONBOARDING.md](ONBOARDING.md).*
+*For full benchmark results and methodology, see [BENCHMARK.md](BENCHMARK.md).*  
+*For setup and MCP connection, see [ONBOARDING.md](ONBOARDING.md).*  
+*All parameters with defaults: see [.env.example](.env.example).*
