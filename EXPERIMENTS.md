@@ -76,17 +76,6 @@ Continued in the Mehen Graph repository.
 
 ---
 
-## v3 Direction: Hebbian Learning
-
-Instead of storing text chunks, store activation patterns.
-Neurons that fire together, wire together.
-
-New edge type `HEBBIAN`: weight increases when nodes co-activate at search time,
-decays during sleep when not used. The graph becomes alive.
-
-Continued in: github.com/artemMprokhorov/Mehen-Graph
-
----
-
 *Last updated: April 4, 2026*
 *Production: LOCOMO 91.1%, PCB 97.1%*
+*Research continues in the Mehen Graph repository.*
