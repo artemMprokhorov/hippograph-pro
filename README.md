@@ -287,6 +287,15 @@ API Key: <your NEURAL_API_KEY>
 For all deployment options (local, LAN, cloud, Docker/no-Docker), see [DEPLOYMENT.md](DEPLOYMENT.md).
 ---
 
+
+## 🖥️ CLI ()
+
+Agent-native command-line interface for Mehen Graph.
+
+
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for all access options.
+
 ## 🧠 Teaching Your AI to Remember You
 
 Once HippoGraph is running, the next step is getting your AI to actually use it.
