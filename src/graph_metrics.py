@@ -36,10 +36,18 @@ class GraphMetrics:
             G.add_node(nid)
         for src, tgt, w in edges:
             G.add_edge(src, tgt, weight=w)
-        
-        # PageRank
+
+        # PageRank requires non-negative weights (stochastic matrix).
+        # Build a separate graph for PageRank with only positive-weight edges
+        # (excludes CONTRADICTS with negative weights, which prevent convergence).
         if G.number_of_edges() > 0:
-            self._pagerank = nx.pagerank(G, weight='weight', max_iter=100)
+            G_pr = nx.DiGraph()
+            for nid in node_ids:
+                G_pr.add_node(nid)
+            for src, tgt, w in edges:
+                if w > 0:
+                    G_pr.add_edge(src, tgt, weight=w)
+            self._pagerank = nx.pagerank(G_pr, weight='weight', max_iter=100)
         else:
             self._pagerank = {nid: 1.0 / max(len(node_ids), 1) for nid in node_ids}
         
