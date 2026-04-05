@@ -73,7 +73,7 @@ button.on{background:#7c9ff5;color:#0a0a0f;border-color:#7c9ff5}
 <div id="container"></div>
 <script src="/3d-force-graph.min.js"></script><script>
 (function(){
-var API=window.location.protocol+'//'+window.location.hostname+':5001';
+var API=window.location.protocol+'//'+window.location.hostname+':5000';
 var KEY=new URLSearchParams(location.search).get('api_key')||localStorage.getItem('hg3k')||'';
 if(KEY)localStorage.setItem('hg3k',KEY);
 function e(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}

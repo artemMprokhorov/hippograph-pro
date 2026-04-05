@@ -351,6 +351,10 @@ def run_contradiction_detection(
             now
         ))
         stored += 1
+
+        conn.commit()
+
+
         # Create CONTRADICTS edges in graph (bidirectional, negative weight)
         try:
             create_edge(c['older_id'], c['newer_id'], weight=-c['severity'], edge_type='CONTRADICTS')

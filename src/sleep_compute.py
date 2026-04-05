@@ -2178,7 +2178,7 @@ def step_metrics_snapshot(db_path, dry_run=False):
         from consciousness_check import compute_all_signals
         import sqlite3
         from datetime import datetime
-        from database import create_note
+        from database import create_node as create_note
 
         conn = sqlite3.connect(db_path)
         signals = compute_all_signals(conn)
