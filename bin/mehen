@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-# mehen: Agent-native CLI for Mehen Graph
-# Place in /usr/local/bin/mehen or ~/bin/mehen
-
-export MEHEN_API_URL="${MEHEN_API_URL:-http://localhost:5000}"
-export MEHEN_API_KEY="${MEHEN_API_KEY:-your-api-key-here}"
-
-exec python3 /Volumes/Balances/mehen-graph/mehen_cli.py "$@"

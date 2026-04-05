@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# hippograph: Agent-native CLI for HippoGraph Pro
+
+export HIPPOGRAPH_API_URL="${HIPPOGRAPH_API_URL:-http://localhost:5001}"
+export HIPPOGRAPH_API_KEY="${HIPPOGRAPH_API_KEY:-your-api-key-here}"
+
+exec python3 "$(dirname "$0")/../mehen_cli.py" "$@"
