@@ -290,7 +290,7 @@ For all deployment options (local, LAN, cloud, Docker/no-Docker), see [DEPLOYMEN
 
 ## 🖥️ CLI ()
 
-Agent-native command-line interface for Mehen Graph.
+Agent-native command-line interface for HippoGraph Pro.
 
 
 

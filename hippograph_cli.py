@@ -21,8 +21,8 @@ Env vars:
 import os, sys, json, argparse, urllib.request, urllib.parse, urllib.error
 from datetime import datetime
 
-API_URL = os.environ.get('HIPPOGRAPH_API_URL', os.environ.get('MEHEN_API_URL', 'http://localhost:5001'))
-API_KEY = os.environ.get('HIPPOGRAPH_API_KEY', os.environ.get('MEHEN_API_KEY', 'your-api-key-here'))
+API_URL = os.environ.get('HIPPOGRAPH_API_URL', os.environ.get('HIPPOGRAPH_API_URL', 'http://localhost:5001'))
+API_KEY = os.environ.get('HIPPOGRAPH_API_KEY', os.environ.get('HIPPOGRAPH_API_KEY', 'your-api-key-here'))
 
 COLORS = {
     'reset': '\033[0m',

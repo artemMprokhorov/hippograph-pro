@@ -140,3 +140,15 @@ conversation_*.md
 benchmark/results/
 benchmark/*.log
 bm25_grid.py
+# Experiment directories (not for public release)
+src-lc/
+data-lc*/
+patch_*.py
+run_*.sh
+Dockerfile.lc
+benchmark/run_consolidate.py
+src/fix_late.py
+src/pcb_v5.py
+src/prepare_uroboros_db.py
+src/quality_bench.py
+src/retroactive_chunking*.py

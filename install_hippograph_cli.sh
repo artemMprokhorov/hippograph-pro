@@ -9,14 +9,14 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_SCRIPT="$SCRIPT_DIR/mehen_cli.py"
+CLI_SCRIPT="$SCRIPT_DIR/hippograph_cli.py"
 
 API_URL="${1:-http://localhost:5001}"
 API_KEY="${2:-your-api-key-here}"
 
 if [ ! -f "$CLI_SCRIPT" ]; then
-    echo "❌ mehen_cli.py not found at: $CLI_SCRIPT"
-    echo "   Run from the HippoGraph Pro repository root."
+    echo "❌ hippograph_cli.py not found at: $CLI_SCRIPT"
+    echo "   Run this script from the hippograph-pro repository root."
     exit 1
 fi
 
@@ -41,7 +41,7 @@ chmod +x /usr/local/bin/hippograph
 echo "✅ Installed: /usr/local/bin/hippograph"
 echo ""
 echo "🚀 Try it:"
-echo "   hippograph search 'temporal retrieval'"
+echo "   hippograph search 'what did we work on last week'"
 echo "   hippograph stats"
 echo "   hippograph pcb"
 echo "   hippograph repl"
