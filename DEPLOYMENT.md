@@ -22,7 +22,7 @@ docker-compose up -d
 ### Expose via Nginx + SSL (recommended)
 
 ```nginx
-# /etc/nginx/sites-enabled/mehen
+# /etc/nginx/sites-enabled/hippograph
 server {
     listen 443 ssl;
     server_name memory.yourdomain.com;
@@ -49,14 +49,13 @@ nginx -s reload
 ### Alternative: Cloudflare Tunnel (no server port exposure)
 
 ```bash
-# Install cloudflared
 brew install cloudflare/cloudflare/cloudflared  # macOS
 # or: curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
 
 cloudflared tunnel login
-cloudflared tunnel create mehen
-cloudflared tunnel route dns mehen memory.yourdomain.com
-cloudflared tunnel run --url http://localhost:5001 mehen
+cloudflared tunnel create hippograph
+cloudflared tunnel route dns hippograph memory.yourdomain.com
+cloudflared tunnel run --url http://localhost:5001 hippograph
 ```
 
 ### Access
@@ -65,7 +64,7 @@ cloudflared tunnel run --url http://localhost:5001 mehen
 |-----------|-----|
 | REST API | `https://memory.yourdomain.com/api/search` |
 | MCP (Claude.ai) | `https://memory.yourdomain.com/sse?api_key=YOUR_KEY` |
-| CLI | `MEHEN_API_URL=https://memory.yourdomain.com mehen search "query"` |
+| REST (curl) | `curl -X POST https://memory.yourdomain.com/api/search -d '{"query":"..."}` |
 
 ---
 
@@ -79,8 +78,6 @@ cloudflared tunnel run --url http://localhost:5001 mehen
 git clone https://github.com/artemMprokhorov/hippograph-pro.git
 cd hippograph-pro
 cp .env.example .env
-# Edit .env: set NEURAL_API_KEY
-
 docker-compose up -d
 ```
 
@@ -96,14 +93,13 @@ ip route get 1 | awk '{print $7}'  # Linux
 |-----------|-----|
 | REST API | `http://192.168.0.X:5001/api/search` |
 | MCP | `http://192.168.0.X:5001/sse?api_key=YOUR_KEY` |
-| CLI | `MEHEN_API_URL=http://192.168.0.X:5001 mehen search "query"` |
 
-### Claude Desktop config
+### Claude Desktop config (`~/.claude/claude_desktop_config.json`)
 
 ```json
 {
   "mcpServers": {
-    "mehen": {
+    "hippograph": {
       "url": "http://192.168.0.X:5001/sse?api_key=YOUR_KEY"
     }
   }
@@ -121,7 +117,7 @@ No SSL needed on a trusted local network.
 ### Requirements
 
 - Python 3.10+
-- 4GB+ RAM (for BGE-M3 embedding model, ~1.5GB download on first run)
+- 4GB+ RAM (BGE-M3 model, ~1.5GB download on first run)
 - SQLite (included with Python)
 
 ### Deploy
@@ -143,7 +139,7 @@ python3 src/server.py
 ### Auto-start on Linux (systemd)
 
 ```ini
-# /etc/systemd/system/mehen.service
+# /etc/systemd/system/hippograph.service
 [Unit]
 Description=HippoGraph Pro Memory Server
 After=network.target
@@ -159,19 +155,19 @@ WantedBy=multi-user.target
 ```
 
 ```bash
-sudo systemctl enable mehen
-sudo systemctl start mehen
+sudo systemctl enable hippograph
+sudo systemctl start hippograph
 ```
 
 ### Auto-start on macOS (launchd)
 
 ```xml
-<!-- ~/Library/LaunchAgents/com.mehen.graph.plist -->
+<!-- ~/Library/LaunchAgents/com.hippograph.pro.plist -->
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>Label</key><string>com.mehen.graph</string>
+  <key>Label</key><string>com.hippograph.pro</string>
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
@@ -180,7 +176,7 @@ sudo systemctl start mehen
   <key>EnvironmentVariables</key>
   <dict>
     <key>NEURAL_API_KEY</key><string>YOUR_KEY</string>
-    <key>DB_PATH</key><string>/Users/you/mehen_memory.db</string>
+    <key>DB_PATH</key><string>/Users/you/hippograph_memory.db</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -189,7 +185,7 @@ sudo systemctl start mehen
 ```
 
 ```bash
-launchctl load ~/Library/LaunchAgents/com.mehen.graph.plist
+launchctl load ~/Library/LaunchAgents/com.hippograph.pro.plist
 ```
 
 ### Access
@@ -226,70 +222,17 @@ python3 src/server.py &
 |-----------|-----|
 | REST API | `http://localhost:5001/api/search` |
 | MCP | `http://localhost:5001/sse?api_key=YOUR_KEY` |
-| CLI | `mehen search "query"` |
 
 ### Claude Desktop config
 
 ```json
 {
   "mcpServers": {
-    "mehen": {
+    "hippograph": {
       "url": "http://localhost:5001/sse?api_key=YOUR_KEY"
     }
   }
 }
-```
-
----
-
-## CLI (`mehen`) — all scenarios
-
-### Install
-
-```bash
-# Option A: install script
-curl -sSL https://raw.githubusercontent.com/artemMprokhorov/hippograph-pro/main/install_mehen_cli.sh | bash
-
-# Option B: manual
-chmod +x mehen_cli.py
-ln -sf $(pwd)/mehen_cli.py /usr/local/bin/mehen
-```
-
-### Configure
-
-```bash
-# Set in shell profile (~/.zshrc or ~/.bashrc)
-export MEHEN_API_URL="http://192.168.0.X:5001"  # or https://memory.yourdomain.com
-export MEHEN_API_KEY="your-api-key"
-```
-
-### Usage
-
-```bash
-mehen search "temporal retrieval results"
-mehen search "what did we work on" --limit 5 --full
-mehen add "Started H4 experiment" --category milestone --intensity 8
-mehen stats
-mehen sleep
-mehen pcb
-mehen graph 42
-mehen repl                    # interactive mode
-mehen search "query" --json   # machine-readable output for agents
-```
-
-### Agent integration (any language)
-
-```bash
-# Shell
-result=$(mehen search "query" --json)
-
-# Python
-import subprocess, json
-result = json.loads(subprocess.check_output(['mehen', 'search', 'query', '--json']))
-
-# Node.js
-const { execSync } = require('child_process');
-const result = JSON.parse(execSync('mehen search "query" --json'));
 ```
 
 ---
@@ -299,8 +242,32 @@ const result = JSON.parse(execSync('mehen search "query" --json'));
 | Interface | Best for | Protocol | Agent-native? |
 |-----------|----------|----------|---------------|
 | REST API | Any language, custom integrations | HTTP POST | Yes (with client code) |
-| MCP | Claude-based agents (zero config) | SSE | Yes (plug and play) |
-| CLI (`mehen`) | Shell agents, scripts, Claude Code | subprocess | Yes (`--json` flag) |
+| MCP | Claude-based agents, zero config | SSE | Yes (plug and play) |
+
+---
+
+## Agent integration via REST (any language)
+
+```bash
+# curl
+curl -X POST 'http://localhost:5001/api/search?api_key=YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{"query": "what did we work on", "limit": 5}'
+
+# Python
+import requests
+r = requests.post('http://localhost:5001/api/search',
+    params={'api_key': 'YOUR_KEY'},
+    json={'query': 'spreading activation', 'limit': 5})
+print(r.json())
+
+# Node.js
+const res = await fetch('http://localhost:5001/api/search?api_key=YOUR_KEY', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({query: 'test', limit: 5})
+});
+```
 
 ---
 
@@ -314,5 +281,5 @@ const result = JSON.parse(execSync('mehen search "query" --json'));
 
 Generate a strong key:
 ```bash
-python3 -c "import secrets; print('mehen_' + secrets.token_urlsafe(32))"
+python3 -c "import secrets; print('hpg_' + secrets.token_urlsafe(32))"
 ```
