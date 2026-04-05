@@ -135,7 +135,7 @@ def find_contradictions(
     conn = sqlite3.connect(db_path)
     rows = conn.execute("""
         SELECT id, content, embedding, timestamp, category, importance
-        FROM engrams
+        FROM nodes
         WHERE embedding IS NOT NULL
         ORDER BY timestamp ASC
     """).fetchall()
@@ -313,8 +313,8 @@ def run_contradiction_detection(
             created_at TEXT,
             resolved_at TEXT,
             notes TEXT,
-            FOREIGN KEY (older_node_id) REFERENCES engrams(id) ON DELETE CASCADE,
-            FOREIGN KEY (newer_node_id) REFERENCES engrams(id) ON DELETE CASCADE
+            FOREIGN KEY (older_node_id) REFERENCES nodes(id) ON DELETE CASCADE,
+            FOREIGN KEY (newer_node_id) REFERENCES nodes(id) ON DELETE CASCADE
         )
     """)
 
