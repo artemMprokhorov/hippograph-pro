@@ -284,7 +284,7 @@ URL: http://localhost:5001/sse2
 API Key: <your NEURAL_API_KEY>
 ```
 
-For remote access via ngrok, see [MCP_CONNECTION.md](MCP_CONNECTION.md).
+For all deployment options (local, LAN, cloud, Docker/no-Docker), see [DEPLOYMENT.md](DEPLOYMENT.md).
 ---
 
 ## 🧠 Teaching Your AI to Remember You
@@ -373,6 +373,7 @@ The core tradeoff: higher reranker weight + smaller candidate pool = more precis
 
 - [ONBOARDING.md](ONBOARDING.md) — Getting started guide (no technical background needed)
 - [AGENT_PROMPT.md](AGENT_PROMPT.md) — System prompt + init script for your AI (start here after setup)
+- [DEPLOYMENT.md](DEPLOYMENT.md) — All deployment scenarios (local, LAN, cloud, Docker/no-Docker)
 - [MCP_CONNECTION.md](MCP_CONNECTION.md) — MCP setup and full tool reference
 - [CONFIGURATION.md](CONFIGURATION.md) — Configuration profiles: personal memory, project memory, hybrid. All parameters explained.
 - [BENCHMARK.md](BENCHMARK.md) — Full benchmark results and methodology
