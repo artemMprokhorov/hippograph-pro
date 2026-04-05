@@ -1,7 +1,6 @@
 # HippoGraph Pro — Experiments Log
 
-This document records the full research journey from HippoGraph Pro to Mehen Graph.
-Continued in the Mehen Graph repository.
+This document records the full research journey from HippoGraph Pro.
 
 **Philosophy:** "What didn't work" is as valuable as "what worked."
 
@@ -78,4 +77,4 @@ Continued in the Mehen Graph repository.
 
 *Last updated: April 4, 2026*
 *Production: LOCOMO 91.1%, PCB 97.1%*
-*Research continues in the Mehen Graph repository.*
+*Last updated: April 2026*

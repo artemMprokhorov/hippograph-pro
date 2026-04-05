@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Mehen Graph can run in four configurations. Choose the one that fits your setup.
+HippoGraph Pro can run in four configurations. Choose the one that fits your setup.
 
 ---
 
@@ -11,8 +11,8 @@ Mehen Graph can run in four configurations. Choose the one that fits your setup.
 ### Deploy
 
 ```bash
-git clone https://github.com/artemMprokhorov/Mehen-Graph.git
-cd Mehen-Graph
+git clone https://github.com/artemMprokhorov/hippograph-pro.git
+cd hippograph-pro
 cp .env.example .env
 # Edit .env: set NEURAL_API_KEY to a strong random string
 
@@ -76,8 +76,8 @@ cloudflared tunnel run --url http://localhost:5001 mehen
 ### Deploy
 
 ```bash
-git clone https://github.com/artemMprokhorov/Mehen-Graph.git
-cd Mehen-Graph
+git clone https://github.com/artemMprokhorov/hippograph-pro.git
+cd hippograph-pro
 cp .env.example .env
 # Edit .env: set NEURAL_API_KEY
 
@@ -127,8 +127,8 @@ No SSL needed on a trusted local network.
 ### Deploy
 
 ```bash
-git clone https://github.com/artemMprokhorov/Mehen-Graph.git
-cd Mehen-Graph
+git clone https://github.com/artemMprokhorov/hippograph-pro.git
+cd hippograph-pro
 
 pip install -r requirements.txt
 python3 -m spacy download xx_ent_wiki_sm
@@ -145,14 +145,14 @@ python3 src/server.py
 ```ini
 # /etc/systemd/system/mehen.service
 [Unit]
-Description=Mehen Graph Memory Server
+Description=HippoGraph Pro Memory Server
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/Mehen-Graph
+WorkingDirectory=/opt/hippograph-pro
 ExecStart=python3 src/server.py
 Restart=always
-EnvironmentFile=/opt/Mehen-Graph/.env
+EnvironmentFile=/opt/hippograph-pro/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -175,7 +175,7 @@ sudo systemctl start mehen
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/you/Mehen-Graph/src/server.py</string>
+    <string>/Users/you/hippograph-pro/src/server.py</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -205,8 +205,8 @@ Same as Docker scenario — use `http://192.168.0.X:5000` (default port without 
 ### Deploy (Docker)
 
 ```bash
-git clone https://github.com/artemMprokhorov/Mehen-Graph.git
-cd Mehen-Graph
+git clone https://github.com/artemMprokhorov/hippograph-pro.git
+cd hippograph-pro
 cp .env.example .env
 docker-compose up -d
 ```
@@ -248,7 +248,7 @@ python3 src/server.py &
 
 ```bash
 # Option A: install script
-curl -sSL https://raw.githubusercontent.com/artemMprokhorov/Mehen-Graph/main/install_mehen_cli.sh | bash
+curl -sSL https://raw.githubusercontent.com/artemMprokhorov/hippograph-pro/main/install_mehen_cli.sh | bash
 
 # Option B: manual
 chmod +x mehen_cli.py
