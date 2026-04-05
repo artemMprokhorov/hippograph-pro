@@ -132,46 +132,83 @@ class MemoryConsolidator:
         conn.close()
         return chains
     
-    def create_consolidation_links(self, clusters, chains):
+    def create_consolidation_links(self, clusters, chains, small_max=10, medium_max=50):
         """
-        Create explicit consolidation edges in database.
-        Edge type: 'consolidation'
+        Create explicit consolidation edges using hybrid topology by cluster size.
+
+        Prevents edge explosion on large semantic clusters while preserving
+        dense connectivity for micro-topics.
+
+        Topology by size:
+        - size <= small_max:  all-to-all  (dense for micro-topics, N*(N-1)/2 edges)
+        - size <= medium_max: star to seed (N-1 edges per cluster)
+        - size >  medium_max: skip (large clusters covered by BELONGS_TO from topic-tfidf)
+
+        Seed = cluster[0] = the node that find_thematic_clusters used to grow
+        the cluster (all other members have similarity >= threshold to it).
+
+        Edge types: 'consolidation' (clusters), 'temporal_chain' (sequences)
         """
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         created = 0
-        
-        # Create cluster links (all-to-all within cluster)
+        skipped_large = 0
+
+        # Create cluster links (hybrid topology by size)
         for cluster in clusters:
-            for i, node1 in enumerate(cluster):
-                for node2 in cluster[i+1:]:
+            size = len(cluster)
+
+            if size <= small_max:
+                # All-to-all for small clusters (dense connectivity)
+                for i, node1 in enumerate(cluster):
+                    for node2 in cluster[i+1:]:
+                        try:
+                            cursor.execute("""
+                                INSERT OR IGNORE INTO edges
+                                (source_id, target_id, edge_type, weight, created_at)
+                                VALUES (?, ?, 'consolidation', 0.9, ?)
+                            """, (node1, node2, datetime.now().isoformat()))
+                            created += cursor.rowcount
+                        except:
+                            pass
+            elif size <= medium_max:
+                # Star to seed for medium clusters
+                seed = cluster[0]
+                for node in cluster[1:]:
                     try:
                         cursor.execute("""
-                            INSERT OR IGNORE INTO edges 
+                            INSERT OR IGNORE INTO edges
                             (source_id, target_id, edge_type, weight, created_at)
                             VALUES (?, ?, 'consolidation', 0.9, ?)
-                        """, (node1, node2, datetime.now().isoformat()))
+                        """, (seed, node, datetime.now().isoformat()))
                         created += cursor.rowcount
                     except:
                         pass
-        
-        # Create chain links (sequential)
+            else:
+                # Large clusters: rely on BELONGS_TO edges from topic-tfidf step
+                skipped_large += 1
+
+        # Create chain links (sequential) - unchanged
         for chain in chains:
             for i in range(len(chain) - 1):
                 node1_id = chain[i][0]
                 node2_id = chain[i+1][0]
                 try:
                     cursor.execute("""
-                        INSERT OR IGNORE INTO edges 
+                        INSERT OR IGNORE INTO edges
                         (source_id, target_id, edge_type, weight, created_at)
                         VALUES (?, ?, 'temporal_chain', 0.95, ?)
                     """, (node1_id, node2_id, datetime.now().isoformat()))
                     created += cursor.rowcount
                 except:
                     pass
-        
+
         conn.commit()
         conn.close()
+
+        if skipped_large > 0:
+            print(f"   Skipped {skipped_large} large clusters (>{medium_max} nodes, covered by BELONGS_TO)")
+
         return created
 
 

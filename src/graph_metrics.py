@@ -37,9 +37,24 @@ class GraphMetrics:
         for src, tgt, w in edges:
             G.add_edge(src, tgt, weight=w)
         
-        # PageRank
+        # PageRank requires non-negative weights (stochastic matrix).
+        # CONTRADICTS edges carry negative weights which prevent convergence.
+        # Fix: run PageRank on G but temporarily zero-out negative weights,
+        # preserving graph structure (node order, connectivity) to avoid
+        # ranking drift on asymmetric edge sets.
         if G.number_of_edges() > 0:
+            has_negative = any(w < 0 for _, _, w in edges)
+            if has_negative:
+                # Temporarily set negative weights to 0 for PageRank only
+                for u, v, data in G.edges(data=True):
+                    if data.get('weight', 0) < 0:
+                        data['weight'] = 0
             self._pagerank = nx.pagerank(G, weight='weight', max_iter=100)
+            # Restore original weights for community detection
+            if has_negative:
+                for src, tgt, w in edges:
+                    if w < 0 and G.has_edge(src, tgt):
+                        G[src][tgt]['weight'] = w
         else:
             self._pagerank = {nid: 1.0 / max(len(node_ids), 1) for nid in node_ids}
         
