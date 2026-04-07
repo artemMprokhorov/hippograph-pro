@@ -36,6 +36,10 @@ BLEND_DELTA = float(os.getenv("BLEND_DELTA", "0.0"))  # temporal weight (0=disab
 INHIBITION_STRENGTH = float(os.getenv("INHIBITION_STRENGTH", "0.3"))
 
 
+KA_ENABLED = os.getenv('KEYWORD_ANCHOR_ENABLED', 'true').lower() == 'true'
+KA_MIN = 80  # skip very short notes
+KA_SKIP = {'lc-chunk', 'abstract-topic', 'atomic-fact', 'keyword-anchor'}
+
 def cosine_similarity(a, b):
     """Calculate cosine similarity between two vectors"""
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
@@ -235,6 +239,72 @@ def _mini_consolidate(node_id, top_k=15, threshold=0.75):
     except Exception as ex:
         # Never block add_note on consolidation errors
         return 0
+
+
+def _create_keyword_anchor(content, category, node_id, emotional_tone, emotional_intensity,
+                           emotional_reflection, ann_index, timestamp=None):
+    """
+    Create one keyword-anchor node for a newly ingested note.
+    Called at ingestion time — anchor lives in the same base as its parent.
+    Small-to-Big: anchor found in ANN -> parent returned in retrieval results.
+    """
+    try:
+        import spacy as _spacy
+        import re as _re
+        import numpy as _np
+
+        _nlp = _spacy.load('xx_ent_wiki_sm')
+        _doc = _nlp(content[:1000])
+        _keys = [e.text.strip() for e in _doc.ents if len(e.text.strip()) > 2]
+
+        # Numeric facts
+        for _pat in [
+            r'[\w@#_-]{2,}[\s:=]+[0-9]+\.?[0-9]*\s*[%pp]*',
+            r'Recall@[0-9]+\s*[=:]?\s*[0-9]+\.?[0-9]*[%]?'
+        ]:
+            for _m in _re.finditer(_pat, content):
+                _f = _m.group(0).strip().rstrip('.,;:')
+                if 5 <= len(_f) <= 50 and _f not in _keys:
+                    _keys.append(_f)
+
+        # Fallback — long words if still empty
+        if len(_keys) < 2:
+            _seen = set()
+            for _w in content.split():
+                if len(_w) > 6 and _w.isalpha() and _w.lower() not in _seen:
+                    _seen.add(_w.lower())
+                    _keys.append(_w)
+                if len(_keys) >= 4:
+                    break
+
+        _keys = list(dict.fromkeys(_keys))[:7]
+        if not _keys:
+            return None
+
+        _anchor_text = 'KEY: ' + ' | '.join(_keys)
+        _anchor_emb = get_model().encode([_anchor_text])[0]
+        _norm = _np.linalg.norm(_anchor_emb)
+        if _norm > 0:
+            _anchor_emb = _anchor_emb / _norm
+
+        _anchor_id = create_node(
+            _anchor_text[:300],
+            'keyword-anchor',
+            _anchor_emb.astype(_np.float32).tobytes(),
+            'low',
+            emotional_tone,
+            emotional_intensity,
+            emotional_reflection,
+            tags=f'anchor parent-{node_id} cat-{category}'
+        )
+        # PART_OF -> parent (Small-to-Big)
+        create_edge(_anchor_id, node_id, weight=0.9, edge_type='PART_OF')
+        # Add to ANN so it's searchable immediately
+        ann_index.add_vector(_anchor_id, _anchor_emb)
+        return _anchor_id
+    except Exception as _kae:
+        print(f'Keyword anchor skipped: {_kae}')
+        return None
 
 def add_note_with_links(content, category="general", importance="normal", force=False,
                         emotional_tone=None, emotional_intensity=5, emotional_reflection=None,
@@ -440,6 +510,15 @@ def add_note_with_links(content, category="general", importance="normal", force=
                 print(f'[LC/{mode_label}] {len(chunk_node_ids)} chunks for note #{node_id}')
         except Exception as _lce:
             print(f'Late chunking skipped: {_lce}')
+
+    # Keyword anchor (Small-to-Big retrieval)
+    if KA_ENABLED and len(content) >= KA_MIN and category not in KA_SKIP:
+        _anchor_id = _create_keyword_anchor(
+            content, category, node_id,
+            emotional_tone, emotional_intensity, emotional_reflection, ann_index
+        )
+        if _anchor_id:
+            result['keyword_anchor'] = _anchor_id
 
     return result
 
