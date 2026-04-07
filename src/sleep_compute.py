@@ -104,6 +104,122 @@ def step_extractive_summary(db_path, dry_run=False):
 
 
 
+
+def step_keyword_anchors(db_path, dry_run=False):
+    """Step 1d: Keyword Anchors (H3 architecture).
+    Creates one keyword-anchor node per eligible note using spaCy NER.
+    Must run AFTER consolidation, BEFORE building new edges.
+    Small-to-Big: anchor found in ANN -> parent returned in retrieval.
+    """
+    print("\n=== Step 1d: Keyword Anchors ===")
+    import sqlite3 as _sq, numpy as _np, re as _re
+
+    MIN_CONTENT = 80
+    MAX_KEYS = 7
+    SKIP_CATS = {'lc-chunk', 'abstract-topic', 'atomic-fact', 'keyword-anchor'}
+    NUMERIC_PATS = [
+        r'[A-Za-z\w@#_-]{2,}[\s:=]+[0-9]+\.?[0-9]*\s*[%kKmMbBpp]*',
+        r'Recall@[0-9]+\s*[=:]?\s*[0-9]+\.?[0-9]*[%]?',
+    ]
+
+    try:
+        import spacy as _spacy
+        _nlp = _spacy.load('xx_ent_wiki_sm')
+    except Exception as e:
+        print(f'  spaCy not available: {e} -- skipping')
+        return {'skipped': True, 'reason': str(e)}
+
+    def _extract_keys(content):
+        keys = []
+        try:
+            doc = _nlp(content[:1000])
+            for ent in doc.ents:
+                t = ent.text.strip()
+                if len(t) > 2 and t not in keys:
+                    keys.append(t)
+        except Exception:
+            pass
+        for pat in NUMERIC_PATS:
+            for m in _re.finditer(pat, content):
+                fact = m.group(0).strip().rstrip('.,;:')
+                if 5 <= len(fact) <= 50 and fact not in keys:
+                    keys.append(fact)
+            if len(keys) >= MAX_KEYS:
+                break
+        if len(keys) < 2:
+            seen = set()
+            for w in content.split():
+                if len(w) > 6 and w.isalpha() and w.lower() not in seen:
+                    seen.add(w.lower())
+                    keys.append(w)
+                if len(keys) >= 4:
+                    break
+        return list(dict.fromkeys(keys))[:MAX_KEYS]
+
+    conn = _sq.connect(db_path)
+    conn.row_factory = _sq.Row
+
+    old = conn.execute("SELECT COUNT(*) FROM nodes WHERE category='keyword-anchor'").fetchone()[0]
+    if old > 0:
+        print(f'  Removing {old} old keyword-anchor nodes...')
+        if not dry_run:
+            conn.execute("DELETE FROM edges WHERE source_id IN (SELECT id FROM nodes WHERE category='keyword-anchor')")
+            conn.execute("DELETE FROM edges WHERE target_id IN (SELECT id FROM nodes WHERE category='keyword-anchor')")
+            conn.execute("DELETE FROM nodes WHERE category='keyword-anchor'")
+            conn.commit()
+
+    skip_list = list(SKIP_CATS)
+    ph = ','.join(['?'] * len(skip_list))
+    q = ("SELECT id, category, content, timestamp, emotional_intensity, emotional_tone "
+         "FROM nodes WHERE category NOT IN (" + ph + ") "
+         "AND length(content) >= ? ORDER BY id ASC")
+    nodes = [dict(n) for n in conn.execute(q, skip_list + [MIN_CONTENT]).fetchall()]
+    print(f'  Nodes to process: {len(nodes)}')
+
+    if dry_run:
+        conn.close()
+        return {'dry_run': True, 'estimated': len(nodes)}
+
+    from stable_embeddings import get_model as _get_model
+    model = _get_model()
+    total = no_keys = errors = 0
+
+    for node in nodes:
+        keys = _extract_keys(node['content'])
+        if not keys:
+            no_keys += 1
+            continue
+        anchor_text = 'KEY: ' + ' | '.join(keys)
+        try:
+            emb = model.encode([anchor_text])[0]
+            norm = _np.linalg.norm(emb)
+            if norm > 0:
+                emb = emb / norm
+            conn.execute(
+                "INSERT INTO nodes (content, category, embedding, importance, "
+                "emotional_tone, emotional_intensity, timestamp, tags) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (anchor_text[:300], 'keyword-anchor', emb.astype(_np.float32).tobytes(),
+                 'low', node['emotional_tone'], node['emotional_intensity'],
+                 node['timestamp'], 'anchor parent-' + str(node['id']) + ' cat-' + node['category'])
+            )
+            anchor_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+            conn.execute(
+                'INSERT OR IGNORE INTO edges (source_id, target_id, edge_type, weight) VALUES (?,?,?,?)',
+                (anchor_id, node['id'], 'PART_OF', 1.0)
+            )
+            total += 1
+        except Exception:
+            errors += 1
+        if total % 500 == 0 and total > 0:
+            conn.commit()
+            print(f'  Progress: {total} anchors...')
+
+    conn.commit()
+    conn.close()
+    print(f'  Done: {total} anchors, {no_keys} no-keys, {errors} errors')
+    return {'anchors_created': total, 'no_keys': no_keys, 'errors': errors}
+
 def step_contradiction_detection(db_path, dry_run=False):
     """Step 1c: Find potentially contradicting note pairs.
 
@@ -2269,6 +2385,12 @@ def run_all(db_path, dry_run=False):
     except Exception as e:
         print(f"  ERROR in contradiction detection: {e}")
         results['contradiction_detection'] = {"error": str(e)}
+
+    try:
+        results['keyword_anchors'] = step_keyword_anchors(db_path, dry_run)
+    except Exception as e:
+        print(f"  ERROR in keyword anchors: {e}")
+        results['keyword_anchors'] = {"error": str(e)}
 
     try:
         results['emotional_resonance'] = step_emotional_resonance(db_path, dry_run)
