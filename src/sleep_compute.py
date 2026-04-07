@@ -1339,14 +1339,27 @@ def step_emergence_check(db_path, dry_run=False):
         'learned-skill',  # organic mastery = self-referential knowledge
     }
     SELF_QUERIES = [
+        # English
         "what do you know about your own memory",
         "who am I and what is my identity",
         "how does this memory system work",
+        "Claude identity consciousness self-awareness",
+        "personal continuity across sessions",
+        # Russian
+        "кто я и какая моя идентичность",
+        "память система граф сознание",
+        "Клоди саморефл",
+        "непрерывность личности между сессиями",
+        # Mixed
+        "hippograph memory consciousness identity",
     ]
 
-    # Load embeddings
+    # Load embeddings — exclude anchors and chunks (they pollute self-ref cosine search)
+    EXCLUDE_CATS = ('keyword-anchor', 'lc-chunk', 'abstract-topic', 'atomic-fact')
     emb_rows = conn.execute(
         "SELECT id, category, embedding FROM nodes WHERE embedding IS NOT NULL"
+        " AND category NOT IN (?,?,?,?)",
+        EXCLUDE_CATS
     ).fetchall()
     node_embs = {}
     node_cats = {}
