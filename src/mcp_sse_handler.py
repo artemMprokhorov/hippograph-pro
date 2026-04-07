@@ -808,54 +808,49 @@ def tool_ingest_skill(content: str, source: str = '', confirmed: bool = False):
 
 
 def tool_update_working_memory(content: str, session_id: str = "current"):
-    """Update or create working memory note for current session.
-    Uses category 'working-memory' in existing memory.db.
-    Finds existing working-memory note and updates it, or creates new one.
+    """INSERT new working memory note (temporal journal).
+    Each call creates a new working-memory node.
+    TEMPORAL_AFTER edge links to previous session for chronological chain.
+    get_working_context returns latest (ORDER BY timestamp DESC LIMIT 1).
     """
     if not content:
         return {"error": {"code": -32602, "message": "Content required"}}
-    
-    from database import get_connection, get_node
-    
-    # Find existing working-memory note
+
+    from database import get_connection
+
+    prev_id = None
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT id FROM nodes WHERE category = 'working-memory' ORDER BY timestamp DESC LIMIT 1"
         )
         row = cursor.fetchone()
-    
-    if row:
-        # Update existing
-        note_id = row["id"]
-        model = get_model()
-        embedding = model.encode(content)[0]
-        from ann_index import get_ann_index
-        ann_idx = get_ann_index()
-        if len(embedding) != ann_idx.dimension:
-            return {"error": {"code": -32603, "message": f"Embedding dim mismatch"}}
-        db_update_node(note_id, content, "working-memory", embedding.tobytes())
-        ann_idx.add_vector(note_id, embedding)
-        # Update BM25
-        from bm25_index import get_bm25_index
-        bm25 = get_bm25_index()
-        if bm25.is_built:
-            bm25.add_document(note_id, content)
-        text = f"✅ Working memory updated (note #{note_id})\n{content[:200]}"
-    else:
-        # Create new working-memory note
-        result = add_note_with_links(
-            content=content,
-            category="working-memory",
-            importance="normal",
-            force=True
-        )
-        if "error" in result:
-            return {"content": [{"type": "text", "text": f"❌ {result['message']}"}]}
-        text = f"✅ Working memory created (note #{result['node_id']})\n{content[:200]}"
-    
-    return {"content": [{"type": "text", "text": text}]}
+        if row:
+            prev_id = row["id"]
 
+    result = add_note_with_links(
+        content=content,
+        category="working-memory",
+        importance="normal",
+        force=True
+    )
+    if "error" in result:
+        return {"content": [{"type": "text", "text": f'❌ {result.get("message", "error")}'}]}
+
+    new_id = result["node_id"]
+
+    if prev_id and prev_id != new_id:
+        with get_connection() as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO edges (source_id, target_id, edge_type, weight) VALUES (?,?,?,?)",
+                (new_id, prev_id, "TEMPORAL_AFTER", 0.9)
+            )
+            conn.commit()
+        text = f"✅ Working memory journal: session #{new_id} → prev #{prev_id}\n{content[:200]}"
+    else:
+        text = f"✅ Working memory journal: first entry #{new_id}\n{content[:200]}"
+
+    return {"content": [{"type": "text", "text": text}]}
 
 def tool_list_anchor_policies():
     """List all anchor policies: hardcoded + user-defined"""
