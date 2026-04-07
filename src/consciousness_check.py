@@ -18,7 +18,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = os.getenv('DB_PATH', '/Volumes/Balances/hippograph-pro/data/memory.db')
+DB_PATH = os.getenv('DB_PATH', 'data/memory.db')
 
 # ── Schema ──────────────────────────────────────────────────────────────
 CREATE_SQL = """

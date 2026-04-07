@@ -289,11 +289,23 @@ For all deployment options (local, LAN, cloud, Docker/no-Docker), see [DEPLOYMEN
 ---
 
 
-## 🖥️ CLI ()
+## 🖥️ CLI (`hippograph`)
 
 Agent-native command-line interface for HippoGraph Pro.
 
+```bash
+# Install
+bash install_hippograph_cli.sh
 
+# Search memory
+hippograph search "what did we decide about the architecture"
+
+# Add a note
+hippograph add "Deployed BGE-M3 to production" --category milestone
+
+# Sleep compute
+hippograph sleep
+```
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for all access options.
 
@@ -390,7 +402,6 @@ The core tradeoff: higher reranker weight + smaller candidate pool = more precis
 - [CONFIGURATION.md](CONFIGURATION.md) — Configuration profiles: personal memory, project memory, hybrid. All parameters explained.
 - [BENCHMARK.md](BENCHMARK.md) — Full benchmark results and methodology
 - [.env.example](.env.example) — All tunable parameters with descriptions
-- [competitive_analysis.md](competitive_analysis.md) — Market positioning
 - [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md) — License compliance
 - [docs/](docs/) — API reference, troubleshooting
 

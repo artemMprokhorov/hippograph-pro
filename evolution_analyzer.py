@@ -15,8 +15,8 @@ from datetime import datetime
 from pathlib import Path
 
 SNAPSHOT_DIRS = [
-    '/Volumes/Balances/hippograph-pro/data',
-    '/Volumes/Balances/backups',
+    'data',
+    'backups',
 ]
 
 LABELS = {

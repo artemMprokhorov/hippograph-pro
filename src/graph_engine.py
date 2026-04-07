@@ -980,7 +980,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
             continue
 
         # atomic-fact / enriched-fragment: replace with parent (Small-to-Big)
-        if node.get("category") in ('atomic-fact', 'enriched-fragment'):
+        if node.get("category") in ('atomic-fact', 'enriched-fragment', 'keyword-anchor'):
             parent_id = _get_fact_parent(node_id)
             if parent_id and parent_id not in seen_ids:
                 parent_node = node_map.get(parent_id)
@@ -998,7 +998,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                             node_map[parent_id] = parent_node
                     except Exception:
                         pass
-                if parent_node and parent_node.get("category") not in ('abstract-topic', 'atomic-fact', 'enriched-fragment'):
+                if parent_node and parent_node.get("category") not in ('abstract-topic', 'atomic-fact', 'enriched-fragment', 'keyword-anchor'):
                     blended[parent_id] = max(blended.get(parent_id, 0), activation * 1.2)
                     node = parent_node
                     node_id = parent_id

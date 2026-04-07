@@ -10,7 +10,7 @@ Usage:
 """
 import sqlite3, argparse, sys
 
-DB = '/Volumes/Balances/hippograph-pro/data/memory.db'
+DB = 'data/memory.db'
 
 
 def get_data(limit=10):
