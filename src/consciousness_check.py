@@ -88,7 +88,8 @@ def compute_global_workspace(conn):
     High score = information can reach anywhere in the graph.
     """
     try:
-        total = conn.execute('SELECT COUNT(*) FROM nodes').fetchone()[0]
+        # Exclude anchors/chunks from total
+        total = conn.execute("SELECT COUNT(*) FROM nodes WHERE category NOT IN ('keyword-anchor','lc-chunk','abstract-topic','atomic-fact')").fetchone()[0]
         if total == 0:
             return 0.0
 
@@ -226,7 +227,8 @@ def compute_metacognition(conn):
     High score = system thinks about its own thinking.
     """
     try:
-        total = conn.execute('SELECT COUNT(*) FROM nodes').fetchone()[0]
+        # Exclude anchors/chunks from total
+        total = conn.execute("SELECT COUNT(*) FROM nodes WHERE category NOT IN ('keyword-anchor','lc-chunk','abstract-topic','atomic-fact')").fetchone()[0]
         if total == 0:
             return 0.0
 
