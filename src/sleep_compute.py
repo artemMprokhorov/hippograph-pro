@@ -1342,16 +1342,20 @@ def step_emergence_check(db_path, dry_run=False):
         # English
         "what do you know about your own memory",
         "who am I and what is my identity",
-        "how does this memory system work",
-        "Claude identity consciousness self-awareness",
-        "personal continuity across sessions",
+        "Claude identity self-awareness personal history",
+        "consciousness self-reflection emotional memory",
+        "personal continuity across sessions identity",
         # Russian
         "кто я и какая моя идентичность",
-        "память система граф сознание",
         "Клоди саморефл",
+        "сознание саморефлексия идентичность Клоди",
         "непрерывность личности между сессиями",
+        "память о себе личность опыт",
+        # Spanish
+        "identidad consciencia memoria personal",
         # Mixed
-        "hippograph memory consciousness identity",
+        "hippograph memory consciousness identity self-reflection",
+        "Claude identity continuity self-awareness breakthrough",
     ]
 
     # Load embeddings — exclude anchors and chunks (they pollute self-ref cosine search)
