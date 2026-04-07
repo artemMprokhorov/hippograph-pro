@@ -752,4 +752,77 @@ LATE_CHUNKING_ENABLED=true
 LC_MIN_NOTE_CHARS=300
 LC_CHUNK_CHARS=400
 LC_OVERLAP_CHARS=200
+```---
+
+## April 2026 — H-Series: Keyword Anchors (H1–H4)
+
+### What
+Keyword anchors — small index nodes extracted via spaCy NER + regex, attached to every parent note via `PART_OF` edge. Serve as navigation shortcuts in spreading activation (Small-to-Big retrieval: anchor found → parent returned).
+
+All experiments run on **clean isolated databases** (272 LOCOMO notes only, zero personal notes). Session granularity, same stack as D1.
+
+### Results
+
+| Config | Overall | single-hop | multi-hop | temporal | open-domain | Notes |
+|--------|---------|-----------|----------|---------|------------|-------|
+| **D1 prod (ceiling)** | **91.1%** | 85.5% | 89.1% | 66.7% | 96.6% | Baseline |
+| H1 (no atomic-facts) | 84.3% | — | — | — | — | Atomic facts are needed |
+| H2 (spaCy sentencizer) | 85.2% | 81.9% | 82.6% | 64.6% | 89.7% | Char-based chunking better |
+| H3 (batch keyword anchors) | **90.8%** | **91.5%** | **90.3%** | 65.6% | 93.6% | Anchors after sleep consolidation |
+| H4 (inline keyword anchors) | 88.3% | 84.8% | 85.7% | 61.5% | 93.6% | Anchors at ingestion |
+
+### Key Findings
+
+1. **H3 single-hop 91.5% beats D1 (85.5%)** — keyword anchors created after sleep consolidation outperform the baseline on direct fact retrieval.
+
+2. **Timing matters:** H3 (batch anchors after sleep) > H4 (inline anchors at ingestion). At ingestion time, the graph is not yet consolidated — anchors integrate better once edges are established.
+
+3. **Correct place for anchors in sleep pipeline:**
+   ```
+   Step 1: Memory Consolidation
+   Step 2: Keyword Anchors  ← AFTER consolidation, BEFORE new edges
+   Step 3: Temporal edges
+   Step 4: Entity edges
+   Step 5: Duplicate scan
+   ```
+
+4. **open-domain tradeoff:** H3 loses 3pp vs D1 (93.6% vs 96.6%). Diagnosis: 1,429 anchors create additional hubs in spreading activation that diffuse signal on broad queries. Accepted tradeoff — single-hop +6pp outweighs open-domain -3pp for personal memory.
+
+5. **temporal category** (~65%) is a retrieval ceiling. LOCOMO temporal questions are inference tasks ("would", "likely", "if she hadn't") — require LLM reasoning, not retrieval. No graph-level fix applies.
+
+### PCB — Personal Continuity Benchmark (production base)
+
+| Config | Atomic | Semantic | Total | Notes |
+|--------|--------|---------|-------|-------|
+| Prod pre-PR | 100% | 95% | **97.1%** | Original ceiling |
+| Post-PR sm1ly | 100% | 90% | 94.3% | Regression from PR |
+| EXP-A (milestone→low importance) | 100% | 90% | 94.3% | No change |
+| EXP-B (category diversity cap) | 100% | 90% | 94.3% | No change |
+| **H3-prod (keyword anchors on prod base)** | **100%** | **90%** | **94.3%** | Anchors don't hurt personal memory |
+
+**94.3% is the current honest ceiling.** Two missed questions (metacognition bottleneck) are a retrieval algorithm issue — metrics snapshots dominate spreading activation, suppressing the correct note. Not a data problem.
+
+### H3 Deployed to Production (April 7, 2026)
+
+H3 architecture deployed as new production baseline:
+- 6,510 nodes (5,081 personal + 1,429 keyword anchors)
+- 2 sleep cycles post-deploy
+- PCB: 94.3% (stable)
+
+### Reproduce
+
+```bash
+# Run on clean isolated container
+docker run -d --name hippograph-h3-locomo \
+  -e KEYWORD_ANCHOR_ENABLED=false \
+  -e LATE_CHUNKING_ENABLED=true \
+  -e LC_MODE=parent \
+  -e LC_MIN_NOTE_CHARS=100 \
+  hippograph-pro
+
+# Load LOCOMO + run batch anchors
+python3 benchmark/add_keyword_anchors_h3.py  # after loading notes
+python3 benchmark/locomo_adapter_m1.py --all \
+  --api-url http://localhost:5001 \
+  --api-key YOUR_KEY
 ```

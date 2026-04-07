@@ -170,7 +170,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 ## 📊 Benchmarks
 
-### Retrieval — LOCOMO (91.1% production config, zero LLM cost)
+### Retrieval — LOCOMO (91.5% single-hop / 90.8% overall, H3 with keyword anchors, zero LLM cost)
 
 | Configuration | Recall@5 | MRR |
 |--------------|----------|-----|
@@ -184,6 +184,7 @@ HippoGraph treats memory the way it should be treated — with care.
 | Production config (Mar 28 2026) — + bge-reranker-v2-m3 + Late Stage Inhibition | 65.5% | 0.562 |
 | Production config (Mar 28 2026) — + BGE-M3 embedding | 69.4% | 0.594 |
 | **Production config (Mar 31 2026)** — + Overlap Chunking (session-level) | **91.1%** | **0.830** |
+| H3 (Apr 2026) — + Keyword Anchors (batch, after sleep) | **90.8%** overall / **91.5%** single-hop | 0.741 |
 
 > All results at **zero LLM inference cost**. Other systems use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
 
@@ -197,7 +198,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 > GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
 
-### Personal Continuity — Real Data (100% Recall@5, PCB v5)
+### Personal Continuity — Real Data (94.3% Recall@5, PCB v5)
 
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
@@ -209,7 +210,7 @@ HippoGraph treats memory the way it should be treated — with care.
 | Security | 50% | Protocols and incidents |
 | Science | **100%** | Methodology, debugging skills, embedding compatibility |
 
-> 32 questions (v4, March 25 2026). Identity, History, Science, Security, Session recall perfect. Overall +14.4pp improvement from v3 (73.1%→87.5%). BM25 hybrid search (gamma=0.15) improved session 80%→100% and architecture 40%→60%. March 27: bge-reranker-v2-m3 + Late Stage Inhibition (INHIBITION_STRENGTH=0.05) deployed — combined stack AVG 90% on internal benchmark.
+> PCB v5 (April 2026): **94.3% Recall@5** (Atomic 100%, Semantic 90%). Two missed questions: metacognition bottleneck — retrieval algorithm issue, not data. H3 keyword anchors don't regress personal memory. Prior peak: 97.1% (pre-PR sm1ly).
 
 ### Why LOCOMO Doesn't Tell the Full Story
 
@@ -350,6 +351,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
+| **Keyword Anchors (H3)** | ✅ Deployed | spaCy NER + regex extraction per note → keyword-anchor node via PART_OF edge. Small-to-Big retrieval: anchor found in ANN → parent returned. Batch creation after sleep consolidation. single-hop +6pp vs D1 baseline. `KEYWORD_ANCHOR_ENABLED=true` |
 | **Working Memory** | ✅ Deployed | update_working_memory MCP tool — single overwritable note (category: working-memory) for current session context. Loaded at session start, updated by AI inference trigger |
 | **Online Consolidation (#40)** | ✅ Deployed | `_mini_consolidate()` at add_note: builds consolidation edges to k=15 nearest neighbours immediately. O(k) cost, zero sleep wait. |
 | **Concept Merging (#46)** | ✅ Deployed | Synonym-aware entity linking: `get_or_create_entity()` resolves aliases to canonical form (ML→machine learning, память→memory). 7998 new edges on production data. |
