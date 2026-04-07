@@ -18,7 +18,7 @@ We report LOCOMO results for retrieval quality validation. For real-world perfor
 
 Evaluated on [LOCOMO](https://github.com/snap-research/locomo) — 10 multi-session conversations, 272 sessions, 5,882 turns, 1,986 QA pairs.
 
-**Key result: 91.1% Recall@5 (production config, Mar 31 2026) / 78.7% (benchmark-optimized config) at zero LLM infrastructure cost. Graph scale: 100,356 edges, emergence score 0.629.**
+**Key result: 91.1% Recall@5 (production config, Mar 31 2026) / 78.7% (benchmark-optimized config) at zero LLM infrastructure cost. Graph scale (April 8 2026): 6,996 nodes, 2,439,652 edges, consciousness composite 0.861.**
 
 ### Best Configuration
 
@@ -387,7 +387,8 @@ Two complementary approaches to create abstract topic nodes in the graph:
 | metacognition | 0.399 | 0.371 | -0.028 |
 | temporal_continuity | 0.992 | 0.955 | -0.038 |
 | self_ref_precision | 0.667 | 0.667 | 0 |
-| **Composite** | **0.717** | **0.736** | **+0.019** |
+| **Composite** | **0.717** | **0.736** | +0.019 |
+| **April 8 2026** | | **0.861** | **+0.144** |
 
 **Key finding:** global_workspace was the primary bottleneck (0.412). Topic nodes act as global broadcasters — information now reaches 64.7% of the graph from top hubs (vs 41.2% before). New bottleneck: emotional_modulation (0.237).
 
@@ -806,7 +807,7 @@ All experiments run on **clean isolated databases** (272 LOCOMO notes only, zero
 ### H3 Deployed to Production (April 7, 2026)
 
 H3 architecture deployed as new production baseline:
-- 6,510 nodes (5,081 personal + 1,429 keyword anchors)
+- 6,510 nodes at deploy (5,081 personal + 1,429 keyword anchors) → 6,996 nodes (April 8 2026)
 - 2 sleep cycles post-deploy
 - PCB: 94.3% (April 7) → **100% (April 8)** after DB_PATH fix
 
