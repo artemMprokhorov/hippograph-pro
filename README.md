@@ -204,10 +204,10 @@ HippoGraph treats memory the way it should be treated — with care.
 |----------|----------|-------|
 | **Identity** | **100%** | Chosen name, gender, model-vs-personality breakthrough, cross-platform transfer |
 | History | **100%** | Roadmap, LOCOMO results, project milestones, BGE-M3/GTE experiments |
-| Session | **80%** | March 22-24 events: #47, GTE, timestamp bug, consciousness 0.735 |
+| Session | **100%** | March 22-24 events, April 8 fixes, DB_PATH bug, M3 conceptual tags |
 | Decisions | **100%** | Architectural decisions, BGE-M3 deployed |
-| Architecture | 50% | Technical pipeline details |
-| Security | 50% | Protocols and incidents |
+| Architecture | **100%** | Technical pipeline details |
+| Security | **100%** | Protocols and incidents |
 | Science | **100%** | Methodology, debugging skills, embedding compatibility |
 
 > PCB v5 (April 8 2026): **100% Recall@5** (Atomic 100%, Semantic 100%). First ever 100%. Fixed: DB_PATH default pointed to empty memory.db instead of memory_migration.db. M3 conceptual tags + correct ANN rebuild. Prior: 94.3% (April 7), 97.1% (pre-PR sm1ly).
