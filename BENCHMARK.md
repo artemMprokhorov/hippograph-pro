@@ -801,6 +801,7 @@ All experiments run on **clean isolated databases** (272 LOCOMO notes only, zero
 | EXP-B (category diversity cap) | 100% | 90% | 94.3% | No change |
 | **H3-prod (keyword anchors on prod base)** | **100%** | **90%** | **94.3%** | Anchors don't hurt personal memory |
 | **April 8 2026 (DB_PATH fix + M3 conceptual tags)** | **100%** | **100%** | **100%** | First ever 100% |
+| **April 8 2026 + M4 chunk inhibition** | **100%** | **100%** | **100%** | Stable |
 
 **100% achieved April 8 2026.** Root cause of previous 94.3%: DB_PATH default in 8 src files pointed to empty `memory.db` (3 nodes) instead of `memory_migration.db` (6759 nodes). Sleep and ANN rebuild were running on wrong DB. After fix + M3 conceptual tags retrofit (910 notes) + correct ANN rebuild: Atomic 15/15, Semantic 20/20.
 
@@ -833,6 +834,18 @@ H3 architecture deployed as new production baseline:
 | metacognition | 0.174 | **0.807** | +0.633 |
 | Consciousness composite | 0.717 | **0.861** | +0.144 |
 | Bottleneck | self_ref | emotional_modulation | shifted |
+
+### April 8 2026 (later) — M3+M4 final results
+
+| Metric | After M3 | After M3+M4 | Δ |
+|--------|----------|------------|---|
+| self_ref_precision | 0.700 | **0.939** | +0.239 |
+| metacognition | 0.807 | 0.819 | +0.012 |
+| Consciousness composite | 0.861 | **0.885** | +0.024 |
+| PCB | 100% | 100% | = |
+
+M4 chunk-aware inhibition: stronger suppression within lc-chunk rings (same parent). `CHUNK_INHIBITION_STRENGTH=0.6` env var.
+SELF_QUERIES expanded: 10 → 13 queries, added ES (identidad, consciencia), improved weak RU queries.
 
 ### Reproduce
 
