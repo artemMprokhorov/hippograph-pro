@@ -81,6 +81,11 @@ This loads automatically at session start for immediate continuity.
 
 Don't update on every exchange — only when something meaningful shifts.
 
+Note: update_working_memory() creates a NEW node each call (temporal journal).
+Previous entries are preserved and linked via TEMPORAL_AFTER edges.
+This gives a chronological history of session states — not just the latest.
+Keyword anchors are auto-created during sleep for improved retrieval.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SEARCHING WELL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
