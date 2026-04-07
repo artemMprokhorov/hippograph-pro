@@ -200,6 +200,8 @@ HippoGraph treats memory the way it should be treated — with care.
 
 ### Personal Continuity — Real Data (100% Recall@5, PCB v5)
 
+> ⚠️ **Note:** PCB (Personal Continuity Benchmark) is our internal benchmark on real personal data — not LOCOMO. LOCOMO score is 90.8% (see above). PCB tests whether the system remembers *your* history, decisions, and identity across sessions.
+
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
 | **Identity** | **100%** | Chosen name, gender, model-vs-personality breakthrough, cross-platform transfer |
