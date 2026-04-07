@@ -575,7 +575,19 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     search_query = normalize_query(search_query)
     query_emb = model.encode(search_query)[0]
     if slog: slog.mark("embedding")
-    
+
+    # M3 variant 3: detect identity/consciousness queries -> boost self-ref categories in SA
+    IDENTITY_KEYWORDS = {
+        'identity', 'consciousness', 'self', 'who am i', 'continuity',
+        'self-awareness', 'self-reflection', 'personal history',
+        'идентичность', 'сознание', 'клоди', 'непрерывность', 'саморефлексия',
+        'identidad', 'consciencia', 'continuidad',
+    }
+    IDENTITY_BOOST_CATS = {'self-identity', 'self-reflection', 'self-awareness', 'consciousness-research'}
+    IDENTITY_BOOST = float(os.getenv('IDENTITY_BOOST', '0.15'))
+    _q_lower = search_query.lower()
+    _is_identity_query = any(kw in _q_lower for kw in IDENTITY_KEYWORDS)
+
     all_nodes = get_all_nodes()
     
     # Step 1: Initialize activation from semantic similarity
@@ -603,7 +615,22 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
         print(f"⚠️  Linear search: {len(activations)} initial candidates (ANN disabled)")
     
     if slog: slog.mark("ann")
-    
+
+    # M3 variant 3: apply identity boost to self-ref nodes if identity query detected
+    if _is_identity_query and IDENTITY_BOOST > 0:
+        for node in all_nodes:
+            if node.get('category') in IDENTITY_BOOST_CATS:
+                nid = node['id']
+                if nid in activations:
+                    activations[nid] = min(1.0, activations[nid] + IDENTITY_BOOST)
+                else:
+                    if node.get('embedding'):
+                        node_emb = np.frombuffer(node['embedding'], dtype=np.float32)
+                        sim = cosine_similarity(query_emb, node_emb)
+                        if sim >= 0.1:
+                            activations[nid] = sim + IDENTITY_BOOST
+                            semantic_sims[nid] = sim
+
     # Step 2a: Build subgraph (Subgraph Sampling optimization)
     # SA runs only within the local neighborhood of ANN candidates,
     # not across the full graph. This keeps iteration cost O(k * avg_degree)
@@ -920,7 +947,36 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     # Step 6: PageRank boost (informational only, not applied to scoring)
     # Testing showed PAGERANK_BOOST > 0 causes P@5 regression
     # PageRank is available via neural_stats for analysis
-    
+
+    # M4: Chunk-aware inhibition — stronger suppression within same lc-chunk ring
+    CHUNK_INHIBITION = float(os.getenv('CHUNK_INHIBITION_STRENGTH', '0.6'))
+    if CHUNK_INHIBITION > 0 and blended:
+        try:
+            from database import get_connection
+            with get_connection() as _conn:
+                _rows = _conn.execute(
+                    "SELECT e.source_id as child_id, e.target_id as parent_id "
+                    "FROM edges e "
+                    "JOIN nodes n ON n.id = e.source_id "
+                    "WHERE e.edge_type = 'PART_OF' "
+                    "AND n.category = 'lc-chunk' "
+                    "AND e.source_id IN ({})" .format(
+                        ','.join(str(x) for x in blended.keys())
+                    )
+                ).fetchall()
+            _parent_chunks = {}
+            for child_id, parent_id in _rows:
+                _parent_chunks.setdefault(parent_id, []).append(child_id)
+            for _parent_id, _chunk_ids in _parent_chunks.items():
+                if len(_chunk_ids) < 2:
+                    continue
+                _winner = max(_chunk_ids, key=lambda x: blended.get(x, 0))
+                for _cid in _chunk_ids:
+                    if _cid != _winner and _cid in blended:
+                        blended[_cid] *= (1.0 - CHUNK_INHIBITION)
+        except Exception:
+            pass
+
     # Step 6.5: Cross-encoder reranking (optional)
     # Rerank top-N candidates using cross-encoder for improved precision
     from reranker import get_reranker, RERANK_ENABLED, RERANK_TOP_N
