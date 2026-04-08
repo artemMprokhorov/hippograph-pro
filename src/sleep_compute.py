@@ -1586,7 +1586,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
                 conn.execute(
                     'INSERT INTO nodes (content, category, importance, emotional_intensity, timestamp) '
                     'VALUES (?, ?, ?, ?, ?)',
-                    (topic_content, 'abstract-topic', 'critical', 3, __import__('datetime').datetime.now().isoformat())
+                    (topic_content, 'abstract-topic', 'normal', 3, __import__('datetime').datetime.now().isoformat())
                 )
                 topic_node_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
                 topic_nodes_created += 1
@@ -1654,9 +1654,11 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
 
     conn = sqlite3.connect(db_path)
     try:
-        # Load all embeddings
+        # Load embeddings (exclude synthetic categories from clustering input)
         nodes = conn.execute(
-            'SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL'
+            "SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL "
+            "AND category NOT IN ('abstract-topic', 'lc-chunk', 'working-memory', "
+            "'atomic-fact', 'enriched-fragment', 'metrics-snapshot')"
         ).fetchall()
 
         if len(nodes) < 10:
@@ -1685,10 +1687,15 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
         # Normalize
         embeddings = normalize(embeddings)
 
-        # Auto k
-        k = n_topics or max(10, len(node_ids) // 30)
+        # Auto k — count only real content nodes for stable k
+        content_count = conn.execute(
+            "SELECT COUNT(*) FROM nodes WHERE category NOT IN "
+            "('abstract-topic', 'lc-chunk', 'working-memory', 'atomic-fact', "
+            "'enriched-fragment', 'metrics-snapshot')"
+        ).fetchone()[0]
+        k = n_topics or max(10, content_count // 30)
         k = min(k, len(node_ids) // 3)
-        print(f'  [topic-kmeans] {len(node_ids)} nodes, k={k} topics')
+        print(f'  [topic-kmeans] {len(node_ids)} content nodes, k={k} topics (from {content_count} content nodes)')
 
         if dry_run:
             print(f'  [topic-kmeans] DRY RUN: would create {k} topics')
@@ -1698,9 +1705,23 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
         km = KMeans(n_clusters=k, random_state=42, n_init=10)
         labels = km.fit_predict(embeddings)
 
-        # Remove old kmeans BELONGS_TO edges
-        # BELONGS_TO already reset by tfidf step or do it here
-        conn.execute("DELETE FROM edges WHERE edge_type='BELONGS_TO'")
+        # Clean old abstract-topic nodes and their edges (idempotent re-clustering)
+        old_topic_ids = [r[0] for r in conn.execute(
+            "SELECT id FROM nodes WHERE category='abstract-topic'"
+        ).fetchall()]
+        if old_topic_ids:
+            placeholders = ','.join('?' * len(old_topic_ids))
+            conn.execute(f"DELETE FROM edges WHERE source_id IN ({placeholders}) OR target_id IN ({placeholders})",
+                         old_topic_ids + old_topic_ids)
+            conn.execute(f"DELETE FROM nodes WHERE id IN ({placeholders})", old_topic_ids)
+            print(f'  [topic-kmeans] Cleaned {len(old_topic_ids)} old abstract-topic nodes')
+
+        # Remove any remaining BELONGS_TO edges from abstract-topic nodes
+        conn.execute(
+            "DELETE FROM edges WHERE edge_type='BELONGS_TO' AND ("
+            "source_id IN (SELECT id FROM nodes WHERE category='abstract-topic') OR "
+            "target_id IN (SELECT id FROM nodes WHERE category='abstract-topic'))"
+        )
 
         topic_nodes_created = 0
         edges_created = 0
@@ -1737,25 +1758,14 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
                 f'Cluster {cluster_idx}/{k}, {len(cluster_node_ids)} members'
             )
 
-            # Create or update topic node
-            existing = conn.execute(
-                "SELECT id FROM nodes WHERE category='abstract-topic' "
-                "AND content LIKE ?",
-                (f'%K-means%Cluster {cluster_idx}/{k}%',)
-            ).fetchone()
-
-            if existing:
-                topic_node_id = existing[0]
-                conn.execute('UPDATE nodes SET content=? WHERE id=?',
-                             (topic_content, topic_node_id))
-            else:
-                conn.execute(
-                    'INSERT INTO nodes (content, category, importance, emotional_intensity, timestamp) '
-                    'VALUES (?, ?, ?, ?, ?)',
-                    (topic_content, 'abstract-topic', 'critical', 3, __import__('datetime').datetime.now().isoformat())
-                )
-                topic_node_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
-                topic_nodes_created += 1
+            # Create topic node (old ones already cleaned above)
+            conn.execute(
+                'INSERT INTO nodes (content, category, importance, emotional_intensity, timestamp) '
+                'VALUES (?, ?, ?, ?, ?)',
+                (topic_content, 'abstract-topic', 'normal', 3, __import__('datetime').datetime.now().isoformat())
+            )
+            topic_node_id = conn.execute('SELECT last_insert_rowid()').fetchone()[0]
+            topic_nodes_created += 1
 
             # BELONGS_TO edges
             for nid in cluster_node_ids:
@@ -2350,8 +2360,8 @@ def step_metrics_snapshot(db_path, dry_run=False):
 
         node_id = create_note(
             content=content_str,
-            category="milestone",
-            importance="critical",
+            category="metrics-snapshot",
+            importance="normal",
             emotional_tone="systematic, reflective",
             emotional_intensity=6,
             tags=tags_str
@@ -2481,11 +2491,8 @@ def run_all(db_path, dry_run=False):
         print(f"  ERROR in entity merge: {e}")
         results['entity_merge'] = {"error": str(e)}
 
-    try:
-        results['topic_tfidf'] = step_topic_linking_tfidf(db_path, dry_run)
-    except Exception as e:
-        print(f"  ERROR in topic linking tfidf: {e}")
-        results['topic_tfidf'] = {"error": str(e)}
+    # step_topic_linking_tfidf removed from pipeline — kmeans subsumes it.
+    # Function kept in file for potential future use.
 
     try:
         results['topic_kmeans'] = step_topic_linking_kmeans(db_path, dry_run)
