@@ -10,8 +10,8 @@ import hashlib
 import hmac
 import os
 
-from database import get_stats, get_node, delete_node as db_delete_node, update_node as db_update_node, get_note_history, restore_note_version
-from graph_engine import add_note_with_links
+from database import get_stats, get_node, delete_node as db_delete_node, update_node as db_update_node, get_engram_history, restore_engram_version
+from graph_engine import add_engram_with_links
 from websocket_events import broadcast_note_added, broadcast_note_updated, broadcast_note_deleted, broadcast_search
 from graph_engine import search_with_activation, get_node_graph, search_with_activation_protected, find_similar_notes
 from stable_embeddings import get_model
@@ -44,7 +44,7 @@ def handle_mcp_request(method, params):
             return {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "hippograph", "version": "2.0.0"}
+                "serverInfo": {"name": "mehen-graph", "version": "2.0.0"}
             }
         elif method == "tools/list":
             return {"tools": get_tools_list()}
@@ -77,7 +77,7 @@ def get_tools_list():
             }
         },
         {
-            "name": "add_note",
+            "name": "add_engram",
             "description": "Add new note with automatic entity extraction, linking, and emotional context. Checks for duplicates.",
             "inputSchema": {
                 "type": "object",
@@ -95,28 +95,28 @@ def get_tools_list():
             }
         },
         {
-            "name": "update_note",
+            "name": "update_engram",
             "description": "Update existing note by ID",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "note_id": {"type": "integer"},
+                    "engram_id": {"type": "integer"},
                     "content": {"type": "string"},
                     "category": {"type": "string"},
                     "emotional_tone": {"type": "string"},
                     "emotional_intensity": {"type": "integer", "default": 5, "minimum": 0, "maximum": 10},
                     "emotional_reflection": {"type": "string"}
                 },
-                "required": ["note_id", "content"]
+                "required": ["engram_id", "content"]
             }
         },
         {
-            "name": "delete_note",
+            "name": "delete_engram",
             "description": "Delete note by ID",
             "inputSchema": {
                 "type": "object",
-                "properties": {"note_id": {"type": "integer"}},
-                "required": ["note_id"]
+                "properties": {"engram_id": {"type": "integer"}},
+                "required": ["engram_id"]
             }
         },
         {
@@ -129,8 +129,8 @@ def get_tools_list():
             "description": "Get graph connections for a specific note",
             "inputSchema": {
                 "type": "object",
-                "properties": {"note_id": {"type": "integer"}},
-                "required": ["note_id"]
+                "properties": {"engram_id": {"type": "integer"}},
+                "required": ["engram_id"]
             }
         },
         {
@@ -139,10 +139,10 @@ def get_tools_list():
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "note_id": {"type": "integer"},
+                    "engram_id": {"type": "integer"},
                     "importance": {"type": "string", "enum": ["critical", "normal", "low"]}
                 },
-                "required": ["note_id", "importance"]
+                "required": ["engram_id", "importance"]
             }
         },
         {
@@ -159,27 +159,27 @@ def get_tools_list():
             }
         },
         {
-            "name": "get_note_history",
+            "name": "get_engram_history",
             "description": "Get version history for a note",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "note_id": {"type": "integer"},
+                    "engram_id": {"type": "integer"},
                     "limit": {"type": "integer", "default": 5}
                 },
-                "required": ["note_id"]
+                "required": ["engram_id"]
             }
         },
         {
-            "name": "restore_note_version",
+            "name": "restore_engram_version",
             "description": "Restore a note to a previous version",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "note_id": {"type": "integer"},
+                    "engram_id": {"type": "integer"},
                     "version_number": {"type": "integer"}
                 },
-                "required": ["note_id", "version_number"]
+                "required": ["engram_id", "version_number"]
             }
         },
         {
@@ -280,6 +280,34 @@ def get_tools_list():
             }
         }
     ]
+    tools += [
+        {
+            "name": "add_intention",
+            "description": "Add a prospective memory note — a pending intention, plan or task. Automatically marked as critical importance (no-decay) until completed or cancelled. Surfaces in search results even for loosely related queries.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "content": {"type": "string", "description": "Description of the intention or task"},
+                    "due": {"type": "string", "description": "Optional due date in YYYY-MM-DD format (e.g. 2026-04-15)"},
+                    "tags": {"type": "string", "description": "Additional space-separated tags"}
+                },
+                "required": ["content"]
+            }
+        },
+        {
+            "name": "complete_intention",
+            "description": "Mark a prospective memory intention as done or cancelled. After completion, the note switches to low importance and can decay normally.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "engram_id": {"type": "integer", "description": "ID of the intention note to complete"},
+                    "status": {"type": "string", "enum": ["done", "cancelled"], "description": "New status"},
+                    "note": {"type": "string", "description": "Optional completion note (e.g. outcome, reason for cancellation)"}
+                },
+                "required": ["engram_id", "status"]
+            }
+        }
+    ]
     return tools
 
 
@@ -299,8 +327,8 @@ def handle_tool_call(params):
             args.get("time_before", None),
             args.get("entity_type", None)
         )
-    elif tool_name == "add_note":
-        return tool_add_note(
+    elif tool_name == "add_engram":
+        return tool_add_engram(
             args.get("content", ""), 
             args.get("category", "general"),
             args.get("importance", "normal"),
@@ -310,29 +338,76 @@ def handle_tool_call(params):
             args.get("emotional_reflection", None),
             args.get("tags", None)
         )
-    elif tool_name == "update_note":
-        return tool_update_note(args.get("note_id"), args.get("content"), args.get("category"), args.get("emotional_tone"), args.get("emotional_intensity"), args.get("emotional_reflection"))
-    elif tool_name == "delete_note":
-        return tool_delete_note(args.get("note_id"))
+    elif tool_name == "update_engram":
+        return tool_update_engram(args.get("engram_id"), args.get("content"), args.get("category"), args.get("emotional_tone"), args.get("emotional_intensity"), args.get("emotional_reflection"))
+    elif tool_name == "delete_engram":
+        return tool_delete_engram(args.get("engram_id"))
     elif tool_name == "neural_stats":
         return tool_stats()
     elif tool_name == "get_graph":
-        return tool_get_graph(args.get("note_id"))
+        return tool_get_graph(args.get("engram_id"))
     elif tool_name == "set_importance":
-        return tool_set_importance(args.get("note_id"), args.get("importance"))
+        return tool_set_importance(args.get("engram_id"), args.get("importance"))
     elif tool_name == "find_similar":
         return tool_find_similar(args.get("content", ""), args.get("threshold", 0.7), args.get("limit", 5))
     
-    elif tool_name == "get_note_history":
-        return tool_get_note_history(args.get("note_id"), args.get("limit", 5))
-    elif tool_name == "restore_note_version":
-        return tool_restore_note_version(args.get("note_id"), args.get("version_number"))
+    elif tool_name == "get_engram_history":
+        return tool_get_engram_history(args.get("engram_id"), args.get("limit", 5))
+    elif tool_name == "restore_engram_version":
+        return tool_restore_engram_version(args.get("engram_id"), args.get("version_number"))
     elif tool_name == "search_stats":
         return tool_search_stats()
     elif tool_name == "sleep_compute":
         return tool_sleep_compute(args.get("dry_run", False))
     elif tool_name == "list_entity_candidates":
         return tool_list_entity_candidates()
+    elif tool_name == "add_intention":
+        content = args.get("content", "")
+        due = args.get("due", "")
+        extra_tags = args.get("tags", "")
+        tags = "pending"
+        if due:
+            tags += f" due:{due}"
+        if extra_tags:
+            tags += f" {extra_tags}"
+        from graph_engine import add_engram_with_links
+        engram_id = add_engram_with_links(
+            content=f"[INTENTION] {content}",
+            category="prospective",
+            importance="critical",
+            tags=tags
+        )
+        result = {"id": engram_id, "status": "pending", "tags": tags}
+
+    elif tool_name == "complete_intention":
+        import sqlite3, os
+        engram_id = args.get("engram_id")
+        status = args.get("status", "done")  # done | cancelled
+        note = args.get("note", "")
+        db_path = os.environ.get("DB_PATH", "/app/data/memory.db")
+        conn = sqlite3.connect(db_path)
+        row = conn.execute(
+            "SELECT content, tags FROM nodes WHERE id=? AND category='prospective'",
+            (engram_id,)
+        ).fetchone()
+        if not row:
+            conn.close()
+            result = {"error": f"Intention #{engram_id} not found or not a prospective note"}
+        else:
+            content, tags = row
+            # Обновляем теги: pending → done/cancelled
+            new_tags = (tags or "").replace("pending", status)
+            new_content = content
+            if note:
+                new_content = f"{content}\n[{status.upper()}] {note}"
+            conn.execute(
+                "UPDATE nodes SET tags=?, content=?, importance='low' WHERE id=?",
+                (new_tags, new_content, engram_id)
+            )
+            conn.commit()
+            conn.close()
+            result = {"id": engram_id, "status": status, "tags": new_tags}
+
     elif tool_name == "merge_entities":
         return tool_merge_entities(args.get("keep_id"), args.get("remove_id"))
     elif tool_name == "list_anchor_policies":
@@ -451,14 +526,14 @@ def tool_search_memory(query: str, limit: int, max_results: int = 10, detail_mod
     return {"content": [{"type": "text", "text": text}]}
 
 
-def tool_add_note(content: str, category: str, importance: str = "normal", force: bool = False,
+def tool_add_engram(content: str, category: str, importance: str = "normal", force: bool = False,
                   emotional_tone: str = None, emotional_intensity: int = 5, emotional_reflection: str = None,
                   tags: str = None):
     """Add note with auto-linking, duplicate detection, and emotional context"""
     if not content:
         return {"error": {"code": -32602, "message": "Content required"}}
     
-    result = add_note_with_links(content, category, importance, force,
+    result = add_engram_with_links(content, category, importance, force,
                                  emotional_tone, emotional_intensity, emotional_reflection,
                                  tags=tags)
 
@@ -477,7 +552,7 @@ def tool_add_note(content: str, category: str, importance: str = "normal", force
         text += f"Use force=true to add anyway."
         return {"content": [{"type": "text", "text": text}]}
     
-    text = f"✅ Added note #{result['node_id']}\n"
+    text = f"✅ Added note #{result['engram_id']}\n"
     text += f"Category: {category}\n"
     text += f"Importance: {importance}\n"
     if emotional_tone:
@@ -490,7 +565,7 @@ def tool_add_note(content: str, category: str, importance: str = "normal", force
         text += f"\nTags: {tags}"
     
     # Broadcast to graph viewer
-    broadcast_note_added(result['node_id'], category, importance, content[:200], result['entities'], result['entity_links'])
+    broadcast_note_added(result['engram_id'], category, importance, content[:200], result['entities'], result['entity_links'])
     
     # Add warning about similar notes
     if "warning" in result:
@@ -501,14 +576,14 @@ def tool_add_note(content: str, category: str, importance: str = "normal", force
     return {"content": [{"type": "text", "text": text}]}
 
 
-def tool_update_note(note_id: int, content: str, category: str = None, emotional_tone: str = None, emotional_intensity: int = None, emotional_reflection: str = None):
+def tool_update_engram(engram_id: int, content: str, category: str = None, emotional_tone: str = None, emotional_intensity: int = None, emotional_reflection: str = None):
     """Update existing note"""
-    if not note_id or not content:
+    if not engram_id or not content:
         return {"error": {"code": -32602, "message": "Note ID and content required"}}
     
-    existing = get_node(note_id)
+    existing = get_node(engram_id)
     if not existing:
-        return {"error": {"code": -32602, "message": f"Note #{note_id} not found"}}
+        return {"error": {"code": -32602, "message": f"Note #{engram_id} not found"}}
     
     model = get_model()
     embedding = model.encode(content)[0]
@@ -517,7 +592,7 @@ def tool_update_note(note_id: int, content: str, category: str = None, emotional
     from ann_index import get_ann_index
     ann_idx = get_ann_index()
     if len(embedding) != ann_idx.dimension:
-        print(f'⚠️  update_note dim mismatch: got {len(embedding)}, expected {ann_idx.dimension}. Retrying.')
+        print(f'⚠️  update_engram dim mismatch: got {len(embedding)}, expected {ann_idx.dimension}. Retrying.')
         embedding = model.encode(content)[0]
         if len(embedding) != ann_idx.dimension:
             return {"error": {"code": -32603, "message": f"Embedding dim {len(embedding)} != index dim {ann_idx.dimension}"}}
@@ -525,28 +600,28 @@ def tool_update_note(note_id: int, content: str, category: str = None, emotional
     final_tone = emotional_tone if emotional_tone is not None else existing.get("emotional_tone")
     final_intensity = emotional_intensity if emotional_intensity is not None else existing.get("emotional_intensity", 5)
     final_reflection = emotional_reflection if emotional_reflection is not None else existing.get("emotional_reflection")
-    db_update_node(note_id, content, category, embedding.tobytes(),
+    db_update_node(engram_id, content, category, embedding.tobytes(),
                    emotional_tone=final_tone, emotional_intensity=final_intensity,
                    emotional_reflection=final_reflection)
 
     # Update ANN index with new vector
-    ann_idx.add_vector(note_id, embedding)
+    ann_idx.add_vector(engram_id, embedding)
 
-    broadcast_note_updated(note_id, category or existing["category"], content[:200])
-    return {"content": [{"type": "text", "text": f"✅ Updated note #{note_id}"}]}
+    broadcast_note_updated(engram_id, category or existing["category"], content[:200])
+    return {"content": [{"type": "text", "text": f"✅ Updated note #{engram_id}"}]}
 
 
-def tool_delete_note(note_id: int):
+def tool_delete_engram(engram_id: int):
     """Delete note"""
-    if not note_id:
+    if not engram_id:
         return {"error": {"code": -32602, "message": "Note ID required"}}
     
-    deleted = db_delete_node(note_id)
+    deleted = db_delete_node(engram_id)
     if not deleted:
-        return {"error": {"code": -32602, "message": f"Note #{note_id} not found"}}
+        return {"error": {"code": -32602, "message": f"Note #{engram_id} not found"}}
     
-    broadcast_note_deleted(note_id)
-    text = f"✅ Deleted note #{note_id}\nWas: [{deleted['category']}] {deleted['content'][:100]}..."
+    broadcast_note_deleted(engram_id)
+    text = f"✅ Deleted note #{engram_id}\nWas: [{deleted['category']}] {deleted['content'][:100]}..."
     return {"content": [{"type": "text", "text": text}]}
 
 
@@ -590,16 +665,16 @@ def tool_stats():
     return {"content": [{"type": "text", "text": text}]}
 
 
-def tool_get_graph(note_id: int):
+def tool_get_graph(engram_id: int):
     """Get graph for a note"""
-    if not note_id:
+    if not engram_id:
         return {"error": {"code": -32602, "message": "Note ID required"}}
     
-    graph = get_node_graph(note_id)
+    graph = get_node_graph(engram_id)
     if "error" in graph:
         return {"error": {"code": -32602, "message": graph["error"]}}
     
-    text = f"🔗 Graph for note #{note_id}\n\n"
+    text = f"🔗 Graph for note #{engram_id}\n\n"
     text += f"Node: {graph['node']['content']}\n\n"
     text += f"Connections ({len(graph['connections'])}):\n"
     
@@ -609,22 +684,22 @@ def tool_get_graph(note_id: int):
     return {"content": [{"type": "text", "text": text}]}
 
 
-def tool_set_importance(note_id: int, importance: str):
+def tool_set_importance(engram_id: int, importance: str):
     """Set importance level for a note"""
-    if not note_id or not importance:
+    if not engram_id or not importance:
         return {"error": {"code": -32602, "message": "Note ID and importance required"}}
     
     if importance not in ('critical', 'normal', 'low'):
         return {"error": {"code": -32602, "message": "Importance must be 'critical', 'normal', or 'low'"}}
     
     from database import set_importance
-    success = set_importance(note_id, importance)
+    success = set_importance(engram_id, importance)
     
     if success:
         multipliers = {'critical': '2.0x', 'normal': '1.0x', 'low': '0.5x'}
-        text = f"✅ Note #{note_id} importance set to '{importance}' ({multipliers[importance]} activation)"
+        text = f"✅ Note #{engram_id} importance set to '{importance}' ({multipliers[importance]} activation)"
     else:
-        text = f"❌ Note #{note_id} not found"
+        text = f"❌ Note #{engram_id} not found"
     
     return {"content": [{"type": "text", "text": text}]}
 
@@ -687,13 +762,13 @@ def create_mcp_endpoint(app):
         return jsonify({"status": "ok", "version": "2.0.0"})
 
 
-def tool_get_note_history(note_id: int, limit: int = 5):
+def tool_get_engram_history(engram_id: int, limit: int = 5):
     """Get version history for a note"""
-    versions = get_note_history(note_id, limit)
+    versions = get_engram_history(engram_id, limit)
     if not versions:
-        return {"content": [{"type": "text", "text": f"No version history found for note #{note_id}"}]}
+        return {"content": [{"type": "text", "text": f"No version history found for note #{engram_id}"}]}
     
-    text = f"📜 Version history for note #{note_id} ({len(versions)} versions):\n\n"
+    text = f"📜 Version history for note #{engram_id} ({len(versions)} versions):\n\n"
     for v in versions:
         preview = v["content"][:200] + "..." if len(v["content"]) > 200 else v["content"]
         text += f"**Version {v['version_number']}** ({v['created_at']})\n"
@@ -703,14 +778,14 @@ def tool_get_note_history(note_id: int, limit: int = 5):
     return {"content": [{"type": "text", "text": text}]}
 
 
-def tool_restore_note_version(note_id: int, version_number: int):
+def tool_restore_engram_version(engram_id: int, version_number: int):
     """Restore a note to a previous version"""
-    success = restore_note_version(note_id, version_number)
+    success = restore_engram_version(engram_id, version_number)
     
     if not success:
-        return {"content": [{"type": "text", "text": f"❌ Version {version_number} not found for note #{note_id}, or restore failed"}]}
+        return {"content": [{"type": "text", "text": f"❌ Version {version_number} not found for note #{engram_id}, or restore failed"}]}
     
-    return {"content": [{"type": "text", "text": f"✅ Note #{note_id} restored to version {version_number}. Current state saved as new version before restore."}]}
+    return {"content": [{"type": "text", "text": f"✅ Note #{engram_id} restored to version {version_number}. Current state saved as new version before restore."}]}
 
 
 def tool_search_stats():
@@ -783,10 +858,10 @@ def tool_ingest_skill(content: str, source: str = '', confirmed: bool = False):
         return {"content": [{"type": "text", "text": text}]}
 
     # status == 'ingested' - actually add to memory
-    from graph_engine import add_note_with_links
+    from graph_engine import add_engram_with_links
 
     note_content = result['note_content']
-    result_node = add_note_with_links(
+    result_node = add_engram_with_links(
         content=note_content,
         category='skill',
         importance='low',
@@ -796,7 +871,7 @@ def tool_ingest_skill(content: str, source: str = '', confirmed: bool = False):
     scan_summary = f"{result['scan'].risk_level} risk"
     text = (
         f"\u2705 Skill ingested: '{skill_name}'\n"
-        f"  Note ID: #{result_node.get('node_id', result_node) if isinstance(result_node, dict) else result_node}\n"
+        f"  Note ID: #{result_node.get('engram_id', result_node) if isinstance(result_node, dict) else result_node}\n"
         f"  Category: skill (importance: low)\n"
         f"  Security scan: {scan_summary}\n"
         f"  Source: {source or '(none)'}\n"
@@ -822,13 +897,13 @@ def tool_update_working_memory(content: str, session_id: str = "current"):
     with get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id FROM nodes WHERE category = 'working-memory' ORDER BY timestamp DESC LIMIT 1"
+            "SELECT id FROM engrams WHERE category = 'working-memory' ORDER BY timestamp DESC LIMIT 1"
         )
         row = cursor.fetchone()
         if row:
             prev_id = row["id"]
 
-    result = add_note_with_links(
+    result = add_engram_with_links(
         content=content,
         category="working-memory",
         importance="normal",
@@ -837,7 +912,7 @@ def tool_update_working_memory(content: str, session_id: str = "current"):
     if "error" in result:
         return {"content": [{"type": "text", "text": f'❌ {result.get("message", "error")}'}]}
 
-    new_id = result["node_id"]
+    new_id = result["engram_id"]
 
     if prev_id and prev_id != new_id:
         with get_connection() as conn:
@@ -949,7 +1024,7 @@ def tool_sleep_compute(dry_run=False):
         sys.path.insert(0, os.path.dirname(__file__))
         from sleep_compute import run_all
         
-        db_path = os.getenv("DB_PATH", "/app/data/memory.db")
+        db_path = os.getenv("DB_PATH", "/app/data/memory_migration.db")
         results = run_all(db_path, dry_run=dry_run)
         
         lines = [f"{'🔍 DRY RUN' if dry_run else '✅ COMPLETED'} — Sleep-Time Compute"]
@@ -962,7 +1037,7 @@ def tool_sleep_compute(dry_run=False):
         
         p = results.get('pagerank', {})
         if 'error' not in p:
-            lines.append(f"📊 Graph: {p.get('nodes', 0)} nodes, {p.get('edges', 0)} edges, {p.get('communities', 0)} communities, {p.get('isolated', 0)} isolated")
+            lines.append(f"📊 Graph: {p.get('engrams', 0)} nodes, {p.get('edges', 0)} edges, {p.get('communities', 0)} communities, {p.get('isolated', 0)} isolated")
         
         o = results.get('orphans', {})
         if 'error' not in o:

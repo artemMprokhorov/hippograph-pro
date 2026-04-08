@@ -674,6 +674,69 @@ def get_protected_categories(db_path: str) -> set:
 PROTECTED_CATEGORIES = HARDCODED_PROTECTED_CATEGORIES
 
 
+
+
+def step_prospective_memory(db_path, dry_run=False):
+    """Step 3b: Prospective Memory maintenance.
+    
+    - pending intentions: importance=critical (no-decay via anchor protection)
+    - done intentions: importance=low (normal decay)
+    - cancelled intentions: importance=low (fast decay)
+    - overdue intentions: add OVERDUE tag to content
+    """
+    print("\n=== Step 3b: Prospective Memory ===")
+    conn = sqlite3.connect(db_path)
+    
+    prospective = conn.execute(
+        "SELECT id, content, tags, importance FROM nodes WHERE category='prospective'"
+    ).fetchall()
+    
+    if not prospective:
+        print("  No prospective notes found")
+        conn.close()
+        return {"total": 0}
+    
+    pending = done = cancelled = overdue = 0
+    now = datetime.now()
+    
+    for engram_id, content, tags, importance in prospective:
+        tags_str = tags or ''
+        
+        if 'pending' in tags_str:
+            # Protect from decay
+            if importance != 'critical' and not dry_run:
+                conn.execute("UPDATE nodes SET importance='critical' WHERE id=?", (engram_id,))
+            pending += 1
+            
+            # Check if overdue (tag: due:YYYY-MM-DD)
+            import re
+            due_match = re.search(r'due:(\d{4}-\d{2}-\d{2})', tags_str)
+            if due_match:
+                due_date = due_match.group(1)
+                if due_date < now.strftime(' %Y-%m-%d').strip() and 'OVERDUE' not in content:
+                    if not dry_run:
+                        conn.execute(
+                            "UPDATE nodes SET content='[OVERDUE] '||content WHERE id=?",
+                            (engram_id,)
+                        )
+                    overdue += 1
+                    
+        elif 'done' in tags_str or 'cancelled' in tags_str:
+            # Allow decay
+            if importance == 'critical' and not dry_run:
+                conn.execute("UPDATE nodes SET importance='low' WHERE id=?", (engram_id,))
+            if 'done' in tags_str:
+                done += 1
+            else:
+                cancelled += 1
+    
+    if not dry_run:
+        conn.commit()
+    conn.close()
+    
+    print(f"  Prospective: {pending} pending (protected), {done} done (decay), {cancelled} cancelled (decay), {overdue} overdue")
+    return {"pending": pending, "done": done, "cancelled": cancelled, "overdue": overdue}
+
 def step_stale_decay(db_path, dry_run=False):
     """Step 4: Decay weight of edges not accessed recently.
     
@@ -774,7 +837,7 @@ def step_duplicate_scan(db_path, dry_run=False):
     import numpy as np
     conn = sqlite3.connect(db_path)
     rows = conn.execute(
-        "SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL"
+        "SELECT id, embedding FROM engrams WHERE embedding IS NOT NULL"
     ).fetchall()
     conn.close()
 
@@ -970,7 +1033,7 @@ def step_supersedes_scan(db_path, dry_run=False):
 
     # Load embeddings + metadata
     rows = conn.execute(
-        "SELECT id, embedding, timestamp, importance FROM nodes WHERE embedding IS NOT NULL"
+        "SELECT id, embedding, timestamp, importance FROM engrams WHERE embedding IS NOT NULL"
     ).fetchall()
 
     # Load entity links: node_id -> set of entity_ids
@@ -1064,7 +1127,7 @@ def step_supersedes_scan(db_path, dry_run=False):
         )
         # Mark older note as low importance
         conn.execute(
-            "UPDATE engrams SET importance='low' WHERE id=? AND importance='normal'",
+            "UPDATE nodes SET importance='low' WHERE id=? AND importance='normal'",
             (older_id,)
         )
         created += 1
@@ -1361,7 +1424,7 @@ def step_emergence_check(db_path, dry_run=False):
     # Load embeddings — exclude anchors and chunks (they pollute self-ref cosine search)
     EXCLUDE_CATS = ('keyword-anchor', 'lc-chunk', 'abstract-topic', 'atomic-fact')
     emb_rows = conn.execute(
-        "SELECT id, category, embedding FROM nodes WHERE embedding IS NOT NULL"
+        "SELECT id, category, embedding FROM engrams WHERE embedding IS NOT NULL"
         " AND category NOT IN (?,?,?,?)",
         EXCLUDE_CATS
     ).fetchall()
@@ -1486,7 +1549,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
         # Idempotency: clean old abstract-topic nodes and edges before recreating
         if not dry_run:
             old_topic_ids = [r[0] for r in conn.execute(
-                "SELECT id FROM nodes WHERE category='abstract-topic'"
+                "SELECT id FROM engrams WHERE category='abstract-topic'"
             ).fetchall()]
             if old_topic_ids:
                 placeholders = ','.join('?' * len(old_topic_ids))
@@ -1497,8 +1560,8 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
 
             conn.execute(
                 "DELETE FROM edges WHERE edge_type='BELONGS_TO' AND ("
-                "source_id IN (SELECT id FROM nodes WHERE category='abstract-topic') OR "
-                "target_id IN (SELECT id FROM nodes WHERE category='abstract-topic'))"
+                "source_id IN (SELECT id FROM engrams WHERE category='abstract-topic') OR "
+                "target_id IN (SELECT id FROM engrams WHERE category='abstract-topic'))"
             )  # reset both variants
 
         # Get all nodes with their community (via cluster representative lookup)
@@ -1586,7 +1649,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
 
             # Check if topic node already exists
             existing = conn.execute(
-                "SELECT id FROM nodes WHERE category='abstract-topic' "
+                "SELECT id FROM engrams WHERE category='abstract-topic' "
                 "AND content LIKE ?",
                 (f'%TF-IDF): {topic_label}%',)
             ).fetchone()
@@ -1594,7 +1657,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
             if existing:
                 topic_node_id = existing[0]
                 conn.execute(
-                    'UPDATE engrams SET content=? WHERE id=?',
+                    'UPDATE nodes SET content=? WHERE id=?',
                     (topic_content, topic_node_id)
                 )
             else:
@@ -1671,7 +1734,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
     try:
         # Load all embeddings
         nodes = conn.execute(
-            "SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL ""AND category NOT IN ('abstract-topic', 'lc-chunk', 'working-memory', ""'atomic-fact', 'enriched-fragment', 'metrics-snapshot')"
+            "SELECT id, embedding FROM engrams WHERE embedding IS NOT NULL ""AND category NOT IN ('abstract-topic', 'lc-chunk', 'working-memory', ""'atomic-fact', 'enriched-fragment', 'metrics-snapshot')"
         ).fetchall()
 
         if len(nodes) < 10:
@@ -1717,7 +1780,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
         # BELONGS_TO already reset by tfidf step or do it here
         # Idempotency: clean old abstract-topic nodes and edges before recreating
         old_topic_ids = [r[0] for r in conn.execute(
-            "SELECT id FROM nodes WHERE category='abstract-topic'"
+            "SELECT id FROM engrams WHERE category='abstract-topic'"
         ).fetchall()]
         if old_topic_ids:
             placeholders = ','.join('?' * len(old_topic_ids))
@@ -1728,8 +1791,8 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
 
         conn.execute(
             "DELETE FROM edges WHERE edge_type='BELONGS_TO' AND ("
-            "source_id IN (SELECT id FROM nodes WHERE category='abstract-topic') OR "
-            "target_id IN (SELECT id FROM nodes WHERE category='abstract-topic'))"
+            "source_id IN (SELECT id FROM engrams WHERE category='abstract-topic') OR "
+            "target_id IN (SELECT id FROM engrams WHERE category='abstract-topic'))"
         )
 
         topic_nodes_created = 0
@@ -1769,14 +1832,14 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
 
             # Create or update topic node
             existing = conn.execute(
-                "SELECT id FROM nodes WHERE category='abstract-topic' "
+                "SELECT id FROM engrams WHERE category='abstract-topic' "
                 "AND content LIKE ?",
                 (f'%K-means%Cluster {cluster_idx}/{k}%',)
             ).fetchone()
 
             if existing:
                 topic_node_id = existing[0]
-                conn.execute('UPDATE engrams SET content=? WHERE id=?',
+                conn.execute('UPDATE nodes SET content=? WHERE id=?',
                              (topic_content, topic_node_id))
             else:
                 conn.execute(
@@ -2242,7 +2305,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
             # VARIANT 1: demote parent
             if not dry_run and variant == 1 and frags:
                 conn.execute(
-                    "UPDATE engrams SET importance='low' WHERE id=?",
+                    "UPDATE nodes SET importance='low' WHERE id=?",
                     (parent_id,)
                 )
                 parents_demoted += 1
@@ -2476,6 +2539,8 @@ def run_all(db_path, dry_run=False):
         results['orphans'] = {"error": str(e)}
 
     try:
+        results['prospective'] = step_prospective_memory(db_path, dry_run)
+
         results['decay'] = step_stale_decay(db_path, dry_run)
     except Exception as e:
         print(f"  ERROR in stale decay: {e}")
@@ -2581,9 +2646,68 @@ def main():
     parser.add_argument("--interval", type=float, default=6, help="Hours between runs (default: 6)")
     parser.add_argument("--dry-run", action="store_true", help="Report only, no changes")
     parser.add_argument("--db", type=str, default=None, help="Database path override")
+    # Prospective memory CLI
+    parser.add_argument("--add-intention", type=str, help="Add a pending intention")
+    parser.add_argument("--due", type=str, default="", help="Due date for intention (YYYY-MM-DD)")
+    parser.add_argument("--complete-intention", type=int, help="Complete intention by ID")
+    parser.add_argument("--status", type=str, default="done", choices=["done", "cancelled"], help="Status for --complete-intention")
+    parser.add_argument("--list-intentions", action="store_true", help="List all prospective intentions")
     args = parser.parse_args()
 
     db_path = args.db or get_db()
+
+    # Prospective memory commands
+    if args.list_intentions:
+        conn = __import__('sqlite3').connect(db_path)
+        rows = conn.execute(
+            "SELECT id, content, tags, importance FROM nodes WHERE category='prospective' ORDER BY timestamp DESC"
+        ).fetchall()
+        conn.close()
+        if not rows:
+            print("No prospective intentions found.")
+        else:
+            print(f"\n{'ID':>6}  {'Status':10}  {'Content'}")
+            print("-" * 60)
+            for eid, content, tags, importance in rows:
+                tags_str = tags or ''
+                status = 'pending' if 'pending' in tags_str else ('done' if 'done' in tags_str else 'cancelled')
+                print(f"{eid:>6}  {status:10}  {content[:60]}")
+        return
+
+    if args.add_intention:
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from graph_engine import add_engram_with_links
+        tags = "pending"
+        if args.due:
+            tags += f" due:{args.due}"
+        content = f"[INTENTION] {args.add_intention}"
+        eid = add_engram_with_links(content=content, category="prospective", importance="critical", tags=tags)
+        print(f"Added intention #{eid}: {content}")
+        if args.due:
+            print(f"Due: {args.due}")
+        return
+
+    if args.complete_intention:
+        conn = __import__('sqlite3').connect(db_path)
+        row = conn.execute(
+            "SELECT content, tags FROM nodes WHERE id=? AND category='prospective'",
+            (args.complete_intention,)
+        ).fetchone()
+        if not row:
+            print(f"Intention #{args.complete_intention} not found.")
+            conn.close()
+            return
+        content, tags = row
+        new_tags = (tags or "").replace("pending", args.status)
+        conn.execute(
+            "UPDATE nodes SET tags=?, importance='low' WHERE id=?",
+            (new_tags, args.complete_intention)
+        )
+        conn.commit()
+        conn.close()
+        print(f"Intention #{args.complete_intention} marked as {args.status}.")
+        return
 
     if args.once:
         run_all(db_path, dry_run=args.dry_run)
