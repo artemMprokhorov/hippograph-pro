@@ -35,10 +35,12 @@ BLEND_DELTA = float(os.getenv("BLEND_DELTA", "0.0"))  # temporal weight (0=disab
 # Lateral inhibition: GABA-like suppression within communities (0=disabled, 0.3=mild, 0.7=strong)
 INHIBITION_STRENGTH = float(os.getenv("INHIBITION_STRENGTH", "0.3"))
 
-
+# Keyword anchor: create one anchor node per ingested note at ingestion time
+# This ensures anchors belong to the same base as their parent — no cross-base contamination
 KA_ENABLED = os.getenv('KEYWORD_ANCHOR_ENABLED', 'true').lower() == 'true'
 KA_MIN = 80  # skip very short notes
 KA_SKIP = {'lc-chunk', 'abstract-topic', 'atomic-fact', 'keyword-anchor'}
+
 
 def cosine_similarity(a, b):
     """Calculate cosine similarity between two vectors"""
@@ -143,7 +145,7 @@ def find_similar_notes(content, threshold=SIMILAR_THRESHOLD, limit=5):
     """
     Find notes similar to given content.
     
-    Returns list of (node_id, similarity, content_preview) tuples.
+    Returns list of (engram_id, similarity, content_preview) tuples.
     Useful for deduplication and finding related notes.
     """
     model = get_model()
@@ -172,15 +174,15 @@ def find_similar_notes(content, threshold=SIMILAR_THRESHOLD, limit=5):
 
 
 
-def _mini_consolidate(node_id, top_k=15, threshold=0.75):
-    """Online consolidation at add_note time (item #40).
+def _mini_consolidate(engram_id, top_k=15, threshold=0.75):
+    """Online consolidation at add_engram time (item #40).
 
     Builds consolidation edges to nearest neighbours immediately
     after a note is added, without waiting for sleep_compute.
     O(k) cost vs O(N^2) for full sleep.
 
     Args:
-        node_id: newly created note ID
+        engram_id: newly created note ID
         top_k: how many ANN neighbours to check
         threshold: min cosine similarity for consolidation edge
     """
@@ -198,7 +200,7 @@ def _mini_consolidate(node_id, top_k=15, threshold=0.75):
         # Get embedding of the new note
         with get_connection() as conn:
             row = conn.execute(
-                'SELECT embedding FROM nodes WHERE id=?', (node_id,)
+                'SELECT embedding FROM engrams WHERE id=?', (engram_id,)
             ).fetchone()
         if not row or not row[0]:
             return 0
@@ -216,7 +218,7 @@ def _mini_consolidate(node_id, top_k=15, threshold=0.75):
 
         created = 0
         for i, nid in enumerate(labels):
-            if nid == node_id:
+            if nid == engram_id:
                 continue
             # Convert L2 distance to cosine similarity
             cos_sim = max(0.0, 1.0 - distances[i] / 2.0)
@@ -227,21 +229,21 @@ def _mini_consolidate(node_id, top_k=15, threshold=0.75):
             with get_connection() as conn:
                 existing = conn.execute(
                     "SELECT id FROM edges WHERE source_id=? AND target_id=? AND edge_type='consolidation'",
-                    (node_id, int(nid))
+                    (engram_id, int(nid))
                 ).fetchone()
             if existing:
                 continue
 
-            create_edge(node_id, int(nid), weight=float(cos_sim), edge_type='consolidation')
+            create_edge(engram_id, int(nid), weight=float(cos_sim), edge_type='consolidation')
             created += 1
 
         return created
     except Exception as ex:
-        # Never block add_note on consolidation errors
+        # Never block add_engram on consolidation errors
         return 0
 
 
-def _create_keyword_anchor(content, category, node_id, emotional_tone, emotional_intensity,
+def _create_keyword_anchor(content, category, engram_id, emotional_tone, emotional_intensity,
                            emotional_reflection, ann_index, timestamp=None):
     """
     Create one keyword-anchor node for a newly ingested note.
@@ -295,10 +297,10 @@ def _create_keyword_anchor(content, category, node_id, emotional_tone, emotional
             emotional_tone,
             emotional_intensity,
             emotional_reflection,
-            tags=f'anchor parent-{node_id} cat-{category}'
+            tags=f'anchor parent-{engram_id} cat-{category}'
         )
         # PART_OF -> parent (Small-to-Big)
-        create_edge(_anchor_id, node_id, weight=0.9, edge_type='PART_OF')
+        create_edge(_anchor_id, engram_id, weight=0.9, edge_type='PART_OF')
         # Add to ANN so it's searchable immediately
         ann_index.add_vector(_anchor_id, _anchor_emb)
         return _anchor_id
@@ -306,7 +308,8 @@ def _create_keyword_anchor(content, category, node_id, emotional_tone, emotional
         print(f'Keyword anchor skipped: {_kae}')
         return None
 
-def add_note_with_links(content, category="general", importance="normal", force=False,
+
+def add_engram_with_links(content, category="general", importance="normal", force=False,
                         emotional_tone=None, emotional_intensity=5, emotional_reflection=None,
                         tags=None, skip_ner=False):
     """
@@ -317,8 +320,9 @@ def add_note_with_links(content, category="general", importance="normal", force=
     3. Extract entities (people, concepts, projects)
     4. Link to other notes sharing same entities
     5. Find semantically similar notes and create edges
+    6. Create keyword-anchor node (inline, same base as parent)
     
-    Returns dict with node_id and link statistics.
+    Returns dict with engram_id and link statistics.
     If duplicate found, returns error with existing note info.
     """
     model = get_model()
@@ -338,7 +342,7 @@ def add_note_with_links(content, category="general", importance="normal", force=
     # Dimension guard: ensure embedding matches our index before writing to DB
     ann_index_check = get_ann_index()
     if len(embedding) != ann_index_check.dimension:
-        print(f'⚠️  Embedding dim mismatch on add_note: got {len(embedding)}, expected {ann_index_check.dimension}. Recomputing.')
+        print(f'⚠️  Embedding dim mismatch on add_engram: got {len(embedding)}, expected {ann_index_check.dimension}. Recomputing.')
         embedding = model.encode(full_text)[0]  # retry once
         if len(embedding) != ann_index_check.dimension:
             return {"error": "embedding_dim_mismatch", "message": f"Cannot add note: embedding dim {len(embedding)} != index dim {ann_index_check.dimension}"}
@@ -364,18 +368,18 @@ def add_note_with_links(content, category="general", importance="normal", force=
                 if sim >= DUPLICATE_THRESHOLD: return {"error": "duplicate", "message": f"Similar note exists ({sim:.2%})", "existing_id": n["id"], "existing_content": n["content"][:200], "similarity": round(sim, 4)}
     
     # Create the node with emotional context
-    node_id = create_node(content, category, embedding.tobytes(), importance, emotional_tone, emotional_intensity, emotional_reflection, tags=tags)
+    engram_id = create_node(content, category, embedding.tobytes(), importance, emotional_tone, emotional_intensity, emotional_reflection, tags=tags)
     
     # Add to ANN index incrementally (enables immediate search for this note)
     if ann_index.enabled:
-        ann_index.add_vector(node_id, embedding)
+        ann_index.add_vector(engram_id, embedding)
     
     # Update BM25 index
     from bm25_index import get_bm25_index
     bm25 = get_bm25_index()
     if bm25.is_built:
         bm25_text = (content + " " + (tags or "")).strip()
-        bm25.add_document(node_id, bm25_text)
+        bm25.add_document(engram_id, bm25_text)
     
     # Extract entities and create entity-based links
     entities = [] if skip_ner else extract_entities(content)
@@ -385,13 +389,13 @@ def add_note_with_links(content, category="general", importance="normal", force=
     
     for en,et in entities:
         eid = get_or_create_entity(en, et)
-        link_node_to_entity(node_id, eid)
+        link_node_to_entity(engram_id, eid)
         for r in get_nodes_by_entity(eid):
-            if r["id"] != node_id:
-                create_edge(node_id, r["id"], weight=0.6, edge_type="entity")
-                create_edge(r["id"], node_id, weight=0.6, edge_type="entity")
+            if r["id"] != engram_id:
+                create_edge(engram_id, r["id"], weight=0.6, edge_type="entity")
+                create_edge(r["id"], engram_id, weight=0.6, edge_type="entity")
                 if graph_cache.enabled:
-                    graph_cache.add_edge(node_id, r["id"], weight=0.6, edge_type="entity")
+                    graph_cache.add_edge(engram_id, r["id"], weight=0.6, edge_type="entity")
                 entity_links.append(r["id"])
     
     # Find semantically similar notes
@@ -402,22 +406,22 @@ def add_note_with_links(content, category="general", importance="normal", force=
     if ann_index.enabled:
         # Fast semantic search using ANN index
         # Request 2x candidates to account for self-reference filtering
-        sims = [(n,s) for n,s in ann_index.search(embedding, k=MAX_SEMANTIC_LINKS*2, min_similarity=SIMILARITY_THRESHOLD) if n!=node_id]
+        sims = [(n,s) for n,s in ann_index.search(embedding, k=MAX_SEMANTIC_LINKS*2, min_similarity=SIMILARITY_THRESHOLD) if n!=engram_id]
     else:
         # Fallback to linear scan if ANN not enabled
         sims = []
         for n in get_all_nodes():
-            if n["id"]==node_id or n["embedding"] is None: continue
+            if n["id"]==engram_id or n["embedding"] is None: continue
             sim = cosine_similarity(embedding, np.frombuffer(n["embedding"], dtype=np.float32))
             if sim >= SIMILARITY_THRESHOLD: sims.append((n["id"], sim))
         sims.sort(key=lambda x: x[1], reverse=True)
     
     # Create edges for top MAX_SEMANTIC_LINKS similar nodes
     for rid,sim in sims[:MAX_SEMANTIC_LINKS]:
-        create_edge(node_id, rid, weight=sim, edge_type="semantic")
-        create_edge(rid, node_id, weight=sim, edge_type="semantic")
+        create_edge(engram_id, rid, weight=sim, edge_type="semantic")
+        create_edge(rid, engram_id, weight=sim, edge_type="semantic")
         if graph_cache.enabled:
-            graph_cache.add_edge(node_id, rid, weight=sim, edge_type="semantic")
+            graph_cache.add_edge(engram_id, rid, weight=sim, edge_type="semantic")
         semantic_links.append((rid, sim))
         if sim >= SIMILAR_THRESHOLD: similar_warnings.append({"id": rid, "similarity": round(sim, 4)})
 
@@ -427,31 +431,31 @@ def add_note_with_links(content, category="general", importance="normal", force=
     try:
         node_t_event = None
         with get_connection() as _tc:
-            _row = _tc.execute('SELECT t_event_start FROM nodes WHERE id=?', (node_id,)).fetchone()
+            _row = _tc.execute('SELECT t_event_start FROM engrams WHERE id=?', (engram_id,)).fetchone()
             if _row:
                 node_t_event = _row[0]
         if node_t_event:
             with get_connection() as _tc:
                 _neighbors = _tc.execute(
-                    """SELECT id, t_event_start FROM nodes
+                    """SELECT id, t_event_start FROM engrams
                        WHERE t_event_start IS NOT NULL AND id != ?
                        ORDER BY ABS(julianday(t_event_start) - julianday(?)) ASC
                        LIMIT 6""",
-                    (node_id, node_t_event)
+                    (engram_id, node_t_event)
                 ).fetchall()
             for _nid, _nt in _neighbors:
                 if _nt < node_t_event:
-                    create_edge(_nid, node_id, weight=0.4, edge_type='TEMPORAL_BEFORE')
-                    create_edge(node_id, _nid, weight=0.4, edge_type='TEMPORAL_AFTER')
+                    create_edge(_nid, engram_id, weight=0.4, edge_type='TEMPORAL_BEFORE')
+                    create_edge(engram_id, _nid, weight=0.4, edge_type='TEMPORAL_AFTER')
                 else:
-                    create_edge(node_id, _nid, weight=0.4, edge_type='TEMPORAL_BEFORE')
-                    create_edge(_nid, node_id, weight=0.4, edge_type='TEMPORAL_AFTER')
+                    create_edge(engram_id, _nid, weight=0.4, edge_type='TEMPORAL_BEFORE')
+                    create_edge(_nid, engram_id, weight=0.4, edge_type='TEMPORAL_AFTER')
                 temporal_links += 1
     except Exception as _te:
         print(f'Temporal edge creation skipped: {_te}')
 
     result = {
-        "node_id": node_id,
+        "engram_id": engram_id,
         "entities": entities,
         "entity_links": len(set(entity_links)),
         "semantic_links": len(semantic_links),
@@ -465,19 +469,19 @@ def add_note_with_links(content, category="general", importance="normal", force=
     # Online consolidation (item #40): build consolidation edges immediately
     import os as _os
     if _os.getenv('ONLINE_CONSOLIDATION', 'true').lower() == 'true':
-        consolidation_links = _mini_consolidate(node_id)
+        consolidation_links = _mini_consolidate(engram_id)
         result['consolidation_links'] = consolidation_links
 
     # --- LATE CHUNKING (Experiment D) ---
     if LC_ENABLED:
         try:
             _lc_model = get_model()
-            chunks = late_chunk_encode(content, _lc_model)
-            chunk_node_ids = []
+            chunks = late_chunk_encode(content, _lc_model, timestamp=timestamp or "", category=category)
+            chunk_engram_ids = []
             prev_chunk_id = None
             for ch in chunks:
                 # Inherit emotional context from parent note
-                ch_node_id = create_node(
+                ch_engram_id = create_node(
                     ch['text'],
                     'lc-chunk',
                     ch['embedding'].tobytes(),
@@ -487,7 +491,7 @@ def add_note_with_links(content, category="general", importance="normal", force=
                     emotional_reflection,
                     tags=f'chunk-{ch["chunk_idx"]+1}-of-{ch["total_chunks"]} session-{category}'
                 )
-                ann_index.add_vector(ch_node_id, ch['embedding'])
+                ann_index.add_vector(ch_engram_id, ch['embedding'])
 
                 if LC_PARENTLESS:
                     # Experiment E: no PART_OF to parent.
@@ -495,27 +499,31 @@ def add_note_with_links(content, category="general", importance="normal", force=
                     # on overlapping content (high cosine sim => dense edges).
                     # Sequential NEXT_CHUNK edges preserve order explicitly.
                     if prev_chunk_id is not None:
-                        create_edge(prev_chunk_id, ch_node_id, weight=0.85, edge_type='NEXT_CHUNK')
-                        create_edge(ch_node_id, prev_chunk_id, weight=0.85, edge_type='NEXT_CHUNK')
-                    prev_chunk_id = ch_node_id
+                        create_edge(prev_chunk_id, ch_engram_id, weight=0.85, edge_type='NEXT_CHUNK')
+                        create_edge(ch_engram_id, prev_chunk_id, weight=0.85, edge_type='NEXT_CHUNK')
+                    prev_chunk_id = ch_engram_id
                 else:
                     # Experiment D (default): PART_OF to parent node
-                    create_edge(ch_node_id, node_id, weight=0.9, edge_type='PART_OF')
-                    create_edge(node_id, ch_node_id, weight=0.9, edge_type='PART_OF')
+                    create_edge(ch_engram_id, engram_id, weight=0.9, edge_type='PART_OF')
+                    create_edge(engram_id, ch_engram_id, weight=0.9, edge_type='PART_OF')
 
-                chunk_node_ids.append(ch_node_id)
-            if chunk_node_ids:
-                result['late_chunks'] = len(chunk_node_ids)
+                chunk_engram_ids.append(ch_engram_id)
+            if chunk_engram_ids:
+                result['late_chunks'] = len(chunk_engram_ids)
                 mode_label = 'parentless' if LC_PARENTLESS else 'parent'
-                print(f'[LC/{mode_label}] {len(chunk_node_ids)} chunks for note #{node_id}')
+                print(f'[LC/{mode_label}] {len(chunk_engram_ids)} chunks for note #{engram_id}')
         except Exception as _lce:
             print(f'Late chunking skipped: {_lce}')
 
-    # Keyword anchor (Small-to-Big retrieval)
+    # --- KEYWORD ANCHOR (inline, at ingestion time) ---
+    # Creates one anchor node per note — anchor lives in same base as parent.
+    # Small-to-Big: anchor found in ANN -> parent returned in retrieval.
+    # No cross-base contamination: anchors for locomo-conv notes point to locomo-conv parents.
     if KA_ENABLED and len(content) >= KA_MIN and category not in KA_SKIP:
         _anchor_id = _create_keyword_anchor(
-            content, category, node_id,
-            emotional_tone, emotional_intensity, emotional_reflection, ann_index
+            content, category, engram_id,
+            emotional_tone, emotional_intensity, emotional_reflection,
+            ann_index
         )
         if _anchor_id:
             result['keyword_anchor'] = _anchor_id
@@ -578,13 +586,16 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
 
     # M3 variant 3: detect identity/consciousness queries -> boost self-ref categories in SA
     IDENTITY_KEYWORDS = {
-        'identity', 'consciousness', 'self', 'who am i', 'continuity',
-        'self-awareness', 'self-reflection', 'personal history',
+        # English
+        'identity', 'consciousness', 'self', 'who am i', 'who are you', 'continuity',
+        'self-awareness', 'self-reflection', 'personal history', 'memory system',
+        # Russian
         'идентичность', 'сознание', 'клоди', 'непрерывность', 'саморефлексия',
+        # Spanish
         'identidad', 'consciencia', 'continuidad',
     }
     IDENTITY_BOOST_CATS = {'self-identity', 'self-reflection', 'self-awareness', 'consciousness-research'}
-    IDENTITY_BOOST = float(os.getenv('IDENTITY_BOOST', '0.15'))
+    IDENTITY_BOOST = float(os.getenv('IDENTITY_BOOST', '0.15'))  # additive boost
     _q_lower = search_query.lower()
     _is_identity_query = any(kw in _q_lower for kw in IDENTITY_KEYWORDS)
 
@@ -596,12 +607,12 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     activations = {}
     semantic_sims = {}  # Preserve raw semantic similarities for blend scoring
     
-    if ann_index.enabled and len(ann_index.node_ids) > 0:
+    if ann_index.enabled and len(ann_index.engram_ids) > 0:
         # Fast ANN search
         results = ann_index.search(query_emb, k=limit*3, min_similarity=0.0)
-        for node_id, sim in results:
-            activations[node_id] = sim
-            semantic_sims[node_id] = sim
+        for engram_id, sim in results:
+            activations[engram_id] = sim
+            semantic_sims[engram_id] = sim
     else:
         # Fallback: linear scan through all nodes
         for node in all_nodes:
@@ -624,34 +635,43 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 if nid in activations:
                     activations[nid] = min(1.0, activations[nid] + IDENTITY_BOOST)
                 else:
+                    # Also add nodes not in ANN top-k but in self-ref categories
                     if node.get('embedding'):
                         node_emb = np.frombuffer(node['embedding'], dtype=np.float32)
                         sim = cosine_similarity(query_emb, node_emb)
-                        if sim >= 0.1:
+                        if sim >= 0.1:  # low threshold for identity nodes
                             activations[nid] = sim + IDENTITY_BOOST
                             semantic_sims[nid] = sim
 
+    # Prospective Memory: boost pending intentions
+    PROSPECTIVE_BOOST = float(os.getenv('PROSPECTIVE_BOOST', '0.20'))
+    if PROSPECTIVE_BOOST > 0:
+        for node in all_nodes:
+            if node.get('category') == 'prospective' and node.get('tags') and 'pending' in str(node.get('tags', '')):
+                nid = node['id']
+                if nid in activations:
+                    activations[nid] = min(1.0, activations[nid] + PROSPECTIVE_BOOST)
+                elif node.get('embedding'):
+                    node_emb = np.frombuffer(node['embedding'], dtype=np.float32)
+                    sim = cosine_similarity(query_emb, node_emb)
+                    if sim >= 0.05:  # very low threshold - pending intentions should always surface
+                        activations[nid] = sim + PROSPECTIVE_BOOST
+                        semantic_sims[nid] = sim
+
     # Step 2a: Build subgraph (Subgraph Sampling optimization)
-    # SA runs only within the local neighborhood of ANN candidates,
-    # not across the full graph. This keeps iteration cost O(k * avg_degree)
-    # instead of O(n * avg_degree) where k << n.
-    # SA_SUBGRAPH_ENABLED=true by default; disable via env for full-graph mode.
     import os as _os
     sa_subgraph = _os.getenv("SA_SUBGRAPH_ENABLED", "true").lower() == "true"
     if sa_subgraph and activations:
         graph_cache = get_graph_cache()
-        # Collect seed nodes (ANN candidates) + their direct neighbors
         subgraph_nodes = set(activations.keys())
         for seed_id in list(activations.keys()):
             for neighbor_id, _, _ in graph_cache.get_neighbors(seed_id):
                 subgraph_nodes.add(neighbor_id)
         print(f"  Subgraph: {len(subgraph_nodes)} nodes (from {len(activations)} ANN seeds, full graph={len(get_all_nodes())})") 
     else:
-        subgraph_nodes = None  # None = no restriction, full graph
+        subgraph_nodes = None
 
     # Step 2b: Community-Aware Routing
-    # Further restrict subgraph to communities of ANN seeds + 1 hop outside.
-    # SA_COMMUNITY_ROUTING=true by default; disable via env.
     sa_community = _os.getenv('SA_COMMUNITY_ROUTING', 'true').lower() == 'true'
     if sa_community and activations:
         try:
@@ -686,38 +706,26 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     for iteration in range(iterations):
         new_activations = {}
         
-        # Spread from activated nodes
-        for node_id, activation in activations.items():
-            if activation < 0.01:  # Skip very weakly activated nodes
+        for engram_id, activation in activations.items():
+            if activation < 0.01:
                 continue
             
-            # Keep original activation (with decay)
-            new_activations[node_id] = new_activations.get(node_id, 0) + activation * decay
+            new_activations[engram_id] = new_activations.get(engram_id, 0) + activation * decay
             
-            # Spread to neighbors
-            # Use in-memory graph cache (O(1) instead of SQL)
             graph_cache = get_graph_cache()
-            neighbors = graph_cache.get_neighbors(node_id)
+            neighbors = graph_cache.get_neighbors(engram_id)
             for neighbor_id, edge_weight, edge_type in neighbors:
                 
-                # Subgraph Sampling: skip neighbors outside our subgraph
                 if subgraph_nodes is not None and neighbor_id not in subgraph_nodes:
                     continue
                 
-                # Spread activation through edge
                 spread = activation * edge_weight * decay
                 
-                # VARIANT C: Temporal edge boost
                 if query_is_temporal and edge_type in ('TEMPORAL_BEFORE', 'TEMPORAL_AFTER'):
                     spread *= 1.5
 
-                # Add to neighbor's activation
                 new_activations[neighbor_id] = new_activations.get(neighbor_id, 0) + spread
         
-        # --- LATE STAGE INHIBITION (Variant 2, INHIBITION_STRENGTH=0.05) ---
-        # Mild suppression of losing nodes within each community on final iteration.
-        # Increases diversity and Atomic Facts recall without hurting PCB.
-        # Tuned: strength=0.05 -> AVG 90% (vs 85% at 0.0). Deployed Mar 27 2026.
         if iteration == 2 and INHIBITION_STRENGTH > 0 and new_activations:
             try:
                 from graph_metrics import get_graph_metrics
@@ -734,42 +742,78 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                                 new_activations[_nid] *= (1.0 - INHIBITION_STRENGTH * 0.5)
             except Exception: pass
 
-        # Normalization: scale to 0-1 range based on max
         if new_activations:
             max_activation = max(new_activations.values())
             if max_activation > 0:
-                for node_id in new_activations:
-                    new_activations[node_id] /= max_activation
-        
-
+                for engram_id in new_activations:
+                    new_activations[engram_id] /= max_activation
         
         activations = new_activations
         
-        # Debug output
         if activations:
             print(f"  Iteration {iteration+1}: {len(activations)} nodes, max={max(activations.values()):.4f}, sum={sum(activations.values()):.4f}")
 
     if slog: slog.mark("spreading")
 
-    
+    # === M1: NEXT_CHUNK-aware chain pooling ===
+    import os as _os_m1
+    if _os_m1.getenv('LC_MODE', 'parent').lower() == 'parentless' and activations:
+        try:
+            graph_cache_m1 = get_graph_cache()
+            parent_map = {}
+
+            def _find(x):
+                while parent_map.get(x, x) != x:
+                    parent_map[x] = parent_map.get(parent_map.get(x, x), parent_map.get(x, x))
+                    x = parent_map.get(x, x)
+                return x
+
+            def _union(a, b):
+                ra, rb = _find(a), _find(b)
+                if ra != rb:
+                    parent_map[rb] = ra
+
+            for nid in list(activations.keys()):
+                for neighbor_id, _, edge_type in graph_cache_m1.get_neighbors(nid):
+                    if edge_type == 'NEXT_CHUNK' and neighbor_id in activations:
+                        _union(nid, neighbor_id)
+
+            chains = {}
+            for nid in activations:
+                root = _find(nid)
+                chains.setdefault(root, []).append(nid)
+
+            pooled = 0
+            for root, members in chains.items():
+                if len(members) < 2:
+                    continue
+                chain_max = max(activations[m] for m in members)
+                for m in members:
+                    if activations[m] < chain_max:
+                        activations[m] = chain_max
+                        pooled += 1
+
+            if pooled > 0:
+                print(f"  [M1] NEXT_CHUNK pooling: {len([c for c in chains.values() if len(c)>1])} chains, {pooled} nodes boosted")
+        except Exception as _m1e:
+            print(f"  [M1] skipped: {_m1e}")
+    # === end M1 ===
+
     # Step 3: Apply temporal decay and importance scoring
     node_map = {n["id"]: n for n in all_nodes}
-    for node_id in activations:
-        if node_id in node_map:
-            node = node_map[node_id]
+    for engram_id in activations:
+        if engram_id in node_map:
+            node = node_map[engram_id]
             last_accessed = node.get("last_accessed")
             created = node.get("timestamp")
             importance = node.get("importance", "normal")
             access_count = node.get("access_count", 0)
             category = node.get("category", "general")
             
-            # Apply both factors (category-aware decay for anchor memory)
-            activations[node_id] *= recency_factor(last_accessed, created, category=category)
-            activations[node_id] *= importance_factor(importance, access_count)
+            activations[engram_id] *= recency_factor(last_accessed, created, category=category)
+            activations[engram_id] *= importance_factor(importance, access_count)
     
-    # Step 4: Blend scoring — combine semantic similarity with spreading activation
-    # This prevents hub nodes from dominating results regardless of query relevance
-    # Normalize spreading activations to 0-1 range for fair blending
+    # Step 4: Blend scoring
     if activations:
         max_spread = max(activations.values())
         if max_spread > 0:
@@ -779,7 +823,6 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     else:
         spread_normalized = {}
     
-    # Normalize semantic similarities to 0-1 range
     if semantic_sims:
         max_sem = max(semantic_sims.values())
         if max_sem > 0:
@@ -789,16 +832,12 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     else:
         sem_normalized = {}
     
-    # Blend: combine semantic, spreading, BM25, and temporal signals
-    # final = α × semantic + β × spreading + γ × BM25 + δ × temporal
-    # where β = 1 - α - γ - δ (spreading gets remainder)
     blended = {}
     alpha = BLEND_ALPHA
     gamma = BLEND_GAMMA
     delta = BLEND_DELTA
     beta = max(0.0, 1.0 - alpha - gamma - delta)
     
-    # Get BM25 scores if gamma > 0
     bm25_scores = {}
     if gamma > 0:
         from bm25_index import get_bm25_index
@@ -811,17 +850,15 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     
     if slog: slog.mark("bm25")
     
-    # Get temporal scores if delta > 0 OR query is temporal
     temporal_scores = {}
     if delta > 0 or query_is_temporal:
         try:
             from temporal_extractor import extract_temporal_expressions, compute_temporal_overlap
-            # Date-range overlap scoring (existing)
             query_temporal = extract_temporal_expressions(query)
             if query_temporal["t_event_start"] and query_temporal["t_event_end"]:
                 with get_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT id, t_event_start, t_event_end FROM nodes WHERE t_event_start IS NOT NULL")
+                    cursor.execute("SELECT id, t_event_start, t_event_end FROM engrams WHERE t_event_start IS NOT NULL")
                     for row in cursor.fetchall():
                         nid, ns, ne = row
                         overlap = compute_temporal_overlap(
@@ -830,21 +867,18 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                             temporal_scores[nid] = overlap
                 print(f"🕐 Temporal overlap: {len(temporal_scores)} notes matched")
             
-            # Temporal ordering score for temporal queries (before/after/when)
             if query_is_temporal and temporal_direction:
                 from query_decomposer import compute_temporal_order_score
-                # Get timestamps of all candidate nodes
                 candidate_ids = set(activations.keys()) | set(bm25_scores.keys())
                 if candidate_ids:
                     node_timestamps = {}
                     with get_connection() as conn:
                         cursor = conn.cursor()
                         placeholders = ','.join('?' * len(candidate_ids))
-                        cursor.execute(f"SELECT id, timestamp, t_event_start FROM nodes WHERE id IN ({placeholders})", 
+                        cursor.execute(f"SELECT id, timestamp, t_event_start FROM engrams WHERE id IN ({placeholders})", 
                                       list(candidate_ids))
                         for row in cursor.fetchall():
                             nid = row[0]
-                            # Prefer t_event_start over ingestion timestamp
                             ts = row[2] if row[2] else row[1]
                             if ts:
                                 node_timestamps[nid] = ts
@@ -852,29 +886,24 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                     all_ts = list(node_timestamps.values())
                     for nid, ts in node_timestamps.items():
                         order_score = compute_temporal_order_score(ts, temporal_direction, all_ts)
-                        # Combine: if overlap exists, blend; otherwise use order score
                         existing = temporal_scores.get(nid, 0.0)
                         temporal_scores[nid] = max(existing, order_score)
                     print(f"🕐 Temporal order ({temporal_direction}): {len(node_timestamps)} notes scored")
         except Exception as e:
             print(f"⚠️ Temporal scoring failed: {e}")
     
-    # For temporal queries, ensure delta has weight even if env is 0
     effective_delta = delta
     if query_is_temporal and delta == 0:
-        effective_delta = 0.15  # Auto-enable temporal signal for temporal queries
+        effective_delta = 0.15
         beta = max(0.0, 1.0 - alpha - gamma - effective_delta)
     
     if slog: slog.mark("temporal")
     
-    # Collect all node IDs that appear in any signal
-    all_node_ids = set(activations.keys()) | set(bm25_scores.keys()) | set(temporal_scores.keys())
+    all_engram_ids = set(activations.keys()) | set(bm25_scores.keys()) | set(temporal_scores.keys())
     
-    # Choose fusion method: weighted blend or RRF
     from rrf_fusion import FUSION_METHOD, rrf_fuse
     
     if FUSION_METHOD == "rrf":
-        # RRF: rank-based fusion — no weight tuning needed
         signals = [
             ("semantic", sem_normalized),
             ("spreading", spread_normalized),
@@ -883,57 +912,39 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
         ]
         blended = rrf_fuse(signals)
     else:
-        # Weighted blend (default): α×semantic + β×spreading + γ×BM25 + δ×temporal
-        for node_id in all_node_ids:
-            sem = sem_normalized.get(node_id, 0.0)
-            spread = spread_normalized.get(node_id, 0.0)
-            bm25 = bm25_scores.get(node_id, 0.0)
-            temp = temporal_scores.get(node_id, 0.0)
-            blended[node_id] = alpha * sem + beta * spread + gamma * bm25 + effective_delta * temp
+        for engram_id in all_engram_ids:
+            sem = sem_normalized.get(engram_id, 0.0)
+            spread = spread_normalized.get(engram_id, 0.0)
+            bm25 = bm25_scores.get(engram_id, 0.0)
+            temp = temporal_scores.get(engram_id, 0.0)
+            blended[engram_id] = alpha * sem + beta * spread + gamma * bm25 + effective_delta * temp
     
     print(f"🔀 {FUSION_METHOD.upper()} scoring: {len(blended)} nodes scored")
     
-    # Step 5: Apply entity-count penalty to suppress hub notes
-    # Notes with many entities are generic (session summaries, milestones)
-    # and should be penalized to let specific notes surface
     entity_counts = get_entity_counts_batch()
-    for node_id in blended:
-        ec = entity_counts.get(node_id, 0)
-        if ec > 20:  # Only penalize true hub notes (25-42 entities)
-            blended[node_id] *= 20.0 / ec  # Linear penalty: 0.8 at 25, 0.48 at 42
+    for engram_id in blended:
+        ec = entity_counts.get(engram_id, 0)
+        if ec > 20:
+            blended[engram_id] *= 20.0 / ec
     
-    # Step 5b: CONTRADICTS penalty
-    # If a high-scoring note contradicts this note, suppress it.
-    # Biological analogy: cognitive dissonance actively inhibits contradicted memories.
-    # Penalty: multiply score by 0.5 for each active contradicting note (score > 0.3).
     graph_cache = get_graph_cache()
-    for node_id in list(blended.keys()):
-        for neighbor_id, _, edge_type in graph_cache.get_neighbors(node_id):
+    for engram_id in list(blended.keys()):
+        for neighbor_id, _, edge_type in graph_cache.get_neighbors(engram_id):
             if edge_type == 'CONTRADICTS' and neighbor_id in blended:
-                if blended[neighbor_id] > 0.3:  # Only suppress if contradicting note is active
-                    blended[node_id] *= 0.3
-                    break  # One active contradiction is enough
+                if blended[neighbor_id] > 0.3:
+                    blended[engram_id] *= 0.3
+                    break
 
-    # Step 5b': SUPERSEDES edges exist (item #42) - penalty removed after tuning.
-    # Experiment showed penalty hurts retrieval: old notes provide reasoning context.
-    # Edges kept as structural data for LNN Temporal Reasoner (item #44).
-
-    # Step 5c: Lateral inhibition via sub-communities (GABA analogy)
-    # Within each sub-community, winner keeps full score, others suppressed.
-    # Uses higher-resolution community detection for granular clusters.
-    # Increases result diversity and activation focus.
     if INHIBITION_STRENGTH > 0 and blended:
         try:
             from graph_metrics import get_graph_metrics
             _metrics = get_graph_metrics()
             if _metrics.is_computed:
-                # Group scored nodes by community
-                _comm_groups = {}  # comm_id -> [(node_id, score)]
+                _comm_groups = {}
                 for _nid, _score in blended.items():
                     _comm = _metrics.get_community(_nid)
                     if _comm != -1:
                         _comm_groups.setdefault(_comm, []).append((_nid, _score))
-                # Within each community: winner keeps score, others suppressed
                 for _comm_id, _members in _comm_groups.items():
                     if len(_members) < 2:
                         continue
@@ -942,92 +953,89 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                         if _nid != _winner_id:
                             blended[_nid] *= (1.0 - INHIBITION_STRENGTH)
         except Exception:
-            pass  # Graceful: if metrics unavailable, skip inhibition
-
-    # Step 6: PageRank boost (informational only, not applied to scoring)
-    # Testing showed PAGERANK_BOOST > 0 causes P@5 regression
-    # PageRank is available via neural_stats for analysis
+            pass
 
     # M4: Chunk-aware inhibition — stronger suppression within same lc-chunk ring
-    CHUNK_INHIBITION = float(os.getenv('CHUNK_INHIBITION_STRENGTH', '0.6'))
+    # lc-chunks sharing the same PART_OF parent get extra penalty
+    CHUNK_INHIBITION = float(os.getenv('CHUNK_INHIBITION_STRENGTH', '0.6'))  # stronger than community
     if CHUNK_INHIBITION > 0 and blended:
         try:
             from database import get_connection
+            # Build parent -> [child_ids] map for lc-chunk nodes
+            lc_ids = [nid for nid in blended if True]  # will filter below
             with get_connection() as _conn:
+                # Get parent for each lc-chunk in blended results
                 _rows = _conn.execute(
                     "SELECT e.source_id as child_id, e.target_id as parent_id "
                     "FROM edges e "
-                    "JOIN nodes n ON n.id = e.source_id "
+                    "JOIN engrams n ON n.id = e.source_id "
                     "WHERE e.edge_type = 'PART_OF' "
                     "AND n.category = 'lc-chunk' "
                     "AND e.source_id IN ({})" .format(
                         ','.join(str(x) for x in blended.keys())
                     )
                 ).fetchall()
+            # Group by parent
             _parent_chunks = {}
             for child_id, parent_id in _rows:
                 _parent_chunks.setdefault(parent_id, []).append(child_id)
+            # Apply inhibition within each chunk ring
             for _parent_id, _chunk_ids in _parent_chunks.items():
                 if len(_chunk_ids) < 2:
                     continue
+                # Keep winner, suppress rest
                 _winner = max(_chunk_ids, key=lambda x: blended.get(x, 0))
                 for _cid in _chunk_ids:
                     if _cid != _winner and _cid in blended:
                         blended[_cid] *= (1.0 - CHUNK_INHIBITION)
-        except Exception:
-            pass
+        except Exception as _m4e:
+            pass  # never block retrieval
 
-    # Step 6.5: Cross-encoder reranking (optional)
-    # Rerank top-N candidates using cross-encoder for improved precision
     from reranker import get_reranker, RERANK_ENABLED, RERANK_TOP_N
     if RERANK_ENABLED:
         reranker = get_reranker()
         if reranker.is_available:
-            # Get top-N candidates with their content for reranking
             pre_sorted = sorted(blended.items(), key=lambda x: x[1], reverse=True)[:RERANK_TOP_N]
             rerank_candidates = []
-            for node_id, score in pre_sorted:
-                node = node_map.get(node_id)
+            for engram_id, score in pre_sorted:
+                node = node_map.get(engram_id)
                 content = node.get("content", "") if node else ""
-                rerank_candidates.append((node_id, score, content))
+                rerank_candidates.append((engram_id, score, content))
             
-            # Rerank and update blended scores
             reranked = reranker.rerank(query, rerank_candidates, top_k=RERANK_TOP_N)
-            for node_id, new_score in reranked:
-                blended[node_id] = new_score
+            for engram_id, new_score in reranked:
+                blended[engram_id] = new_score
     
     if slog: slog.mark("rerank")
     
-    # Step 7: Sort and return top results
     sorted_nodes = sorted(blended.items(), key=lambda x: x[1], reverse=True)
     
-    # Debug: check if new notes are in node_map
-    for node_id, _ in sorted_nodes[:10]:
-        if node_id not in node_map:
-            print(f"⚠️  NODE {node_id} in blended but NOT in node_map")
+    for engram_id, _ in sorted_nodes[:10]:
+        if engram_id not in node_map:
+            print(f"⚠️  NODE {engram_id} in blended but NOT in node_map")
             break
     
-    # Small-to-Big retrieval: atomic-fact -> parent note
+    # Small-to-Big retrieval: atomic-fact / keyword-anchor -> parent note
     _fact_parent_cache = {}
-    def _get_fact_parent(fact_node_id):
-        if fact_node_id in _fact_parent_cache:
-            return _fact_parent_cache[fact_node_id]
+    def _get_fact_parent(fact_engram_id):
+        if fact_engram_id in _fact_parent_cache:
+            return _fact_parent_cache[fact_engram_id]
         try:
-            conn2 = get_db()
-            row = conn2.execute(
-                "SELECT target_id FROM edges WHERE source_id=? AND edge_type='PART_OF' LIMIT 1",
-                (fact_node_id,)
-            ).fetchone()
-            parent_id = row[0] if row else None
+            with get_connection() as conn2:
+                row = conn2.execute(
+                    "SELECT target_id FROM edges WHERE source_id=? AND edge_type='PART_OF' LIMIT 1",
+                    (fact_engram_id,)
+                ).fetchone()
+                parent_id = row[0] if row else None
         except Exception:
             parent_id = None
-        _fact_parent_cache[fact_node_id] = parent_id
+        _fact_parent_cache[fact_engram_id] = parent_id
         return parent_id
 
     results = []
     seen_ids = set()
-    for node_id, activation in sorted_nodes:
-        node = node_map.get(node_id)
+    for engram_id, activation in sorted_nodes:
+        node = node_map.get(engram_id)
         if not node:
             continue
 
@@ -1035,39 +1043,36 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
         if node.get("category") == 'abstract-topic':
             continue
 
-        # atomic-fact / enriched-fragment: replace with parent (Small-to-Big)
+        # atomic-fact / enriched-fragment / keyword-anchor: replace with parent (Small-to-Big)
         if node.get("category") in ('atomic-fact', 'enriched-fragment', 'keyword-anchor'):
-            parent_id = _get_fact_parent(node_id)
+            parent_id = _get_fact_parent(engram_id)
             if parent_id and parent_id not in seen_ids:
                 parent_node = node_map.get(parent_id)
-                # If parent not in node_map, load from DB directly
                 if not parent_node:
                     try:
-                        conn_p = get_db()
-                        row = conn_p.execute(
-                            'SELECT id, content, category, importance, emotional_tone, '
-                            'emotional_intensity, timestamp FROM nodes WHERE id=?',
-                            (parent_id,)
-                        ).fetchone()
-                        if row:
-                            parent_node = dict(row)
-                            node_map[parent_id] = parent_node
+                        with get_connection() as conn_p:
+                            row = conn_p.execute(
+                                'SELECT id, content, category, importance, emotional_tone, '
+                                'emotional_intensity, timestamp FROM engrams WHERE id=?',
+                                (parent_id,)
+                            ).fetchone()
+                            if row:
+                                parent_node = dict(row)
+                                node_map[parent_id] = parent_node
                     except Exception:
                         pass
-                if parent_node and parent_node.get("category") not in ('abstract-topic', 'atomic-fact', 'enriched-fragment', 'keyword-anchor'):
+                if parent_node and parent_node.get("category") not in ('abstract-topic', 'atomic-fact', 'enriched-fragment'):
                     blended[parent_id] = max(blended.get(parent_id, 0), activation * 1.2)
                     node = parent_node
-                    node_id = parent_id
+                    engram_id = parent_id
                 else:
                     continue
             else:
                 continue
 
-        # Filter by category if specified
         if category_filter and node.get("category") != category_filter:
             continue
         
-        # Filter by time range if specified
         if time_after or time_before:
             node_timestamp = node.get("timestamp")
             if node_timestamp:
@@ -1076,28 +1081,24 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 if time_before and node_timestamp > time_before:
                     continue
         
-        # Filter by entity type if specified
         if entity_type_filter:
-            # Check if node has any entities of the specified type
-            conn = get_db()
-            has_entity_type = conn.execute("""
-                SELECT 1 FROM node_entities ne
-                JOIN entities e ON ne.entity_id = e.id
-                WHERE ne.node_id = ? AND e.entity_type = ?
-                LIMIT 1
-            """, (node_id, entity_type_filter)).fetchone()
-            conn.close()
+            with get_connection() as conn:
+                has_entity_type = conn.execute("""
+                    SELECT 1 FROM node_entities ne
+                    JOIN entities e ON ne.entity_id = e.id
+                    WHERE ne.engram_id = ? AND e.entity_type = ?
+                    LIMIT 1
+                """, (engram_id, entity_type_filter)).fetchone()
             
             if not has_entity_type:
                 continue
             
-        # Update access tracking
-        touch_node(node_id)
-        if node_id in seen_ids:
+        touch_node(engram_id)
+        if engram_id in seen_ids:
             continue
-        seen_ids.add(node_id)
+        seen_ids.add(engram_id)
         results.append({
-            "id": node_id,
+            "id": engram_id,
             "content": node["content"],
             "category": node["category"],
             "activation": round(activation, 4),
@@ -1107,14 +1108,11 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
             "emotional_intensity": node.get("emotional_intensity", 5)
         })
         
-        # Stop when we have enough results
         if len(results) >= limit:
             break
     
-    # Include total activated count for context awareness
     total_activated = len(blended)
     
-    # Log search metrics
     if slog:
         slog.mark("filters")
         slog.finish(query, results, total_activated, 
@@ -1138,17 +1136,17 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     return results, total_activated
 
 
-def get_node_graph(node_id):
+def get_node_graph(engram_id):
     """Get graph visualization data for a specific node"""
-    node = get_node(node_id)
+    node = get_node(engram_id)
     if not node:
         return {"error": "Node not found"}
     
-    connected = get_connected_nodes(node_id)
+    connected = get_connected_nodes(engram_id)
     
     return {
         "node": {
-            "id": node_id,
+            "id": engram_id,
             "content": node["content"][:100],
             "category": node["category"]
         },
@@ -1164,23 +1162,13 @@ def get_node_graph(node_id):
     }
 """
 Context Window Protection implementation for search_with_activation
-
-Changes:
-1. Added max_results parameter (hard limit, default: 10)
-2. Added detail_mode parameter ("brief" | "full", default: "full")
-3. Token counting for results
-4. Brief mode: returns id, category, first 200 chars, activation
-
-Philosophy: NO summarization (lossy), only truncation (user controls detail)
 """
 
 def format_result_brief(result):
     """Format result in brief mode - first line + metadata for quick scanning"""
     content = result["content"]
-    # Get first meaningful line (skip empty lines)
     lines = [l.strip() for l in content.split('\n') if l.strip()]
     first_line = lines[0] if lines else content[:100]
-    # Cap at 150 chars
     if len(first_line) > 150:
         first_line = first_line[:147] + "..."
     
@@ -1195,7 +1183,6 @@ def format_result_brief(result):
         "total_lines": len(lines)
     }
     
-    # Add emotional context if present
     if result.get("emotional_tone"):
         brief["emotional_tone"] = result["emotional_tone"]
     if result.get("emotional_intensity") and result["emotional_intensity"] != 5:
@@ -1213,38 +1200,9 @@ def search_with_activation_protected(query, limit=5, max_results=10, detail_mode
                                    entity_type_filter=None):
     """
     Search with context window protection.
-    
-    NEW Parameters:
-        max_results: Hard limit on results returned (default: 10)
-                    Overrides 'limit' if limit > max_results
-        detail_mode: "brief" (first line + metadata) or "full" (complete content)
-                    Default: "full"
-    
-    Returns:
-        {
-            "results": [...],
-            "metadata": {
-                "total_activated": int,  # How many nodes were activated
-                "returned": int,          # How many returned
-                "detail_mode": str,       # "brief" or "full"
-                "estimated_tokens": int,  # Rough token count
-                "truncated": bool         # True if total_activated > returned
-            }
-        }
-    
-    Brief mode returns:
-        - id, category, preview (200 chars), activation, timestamp
-        - full_length (original content length)
-        - truncated flag
-    
-    Full mode returns:
-        - id, category, content (complete), activation, timestamp
     """
-    
-    # Enforce max_results hard limit
     effective_limit = min(limit, max_results)
     
-    # Get results from original search_with_activation
     raw_results, total_activated = search_with_activation(
         query=query,
         limit=effective_limit,
@@ -1256,7 +1214,6 @@ def search_with_activation_protected(query, limit=5, max_results=10, detail_mode
         entity_type_filter=entity_type_filter
     )
     
-    # Format based on detail mode
     if detail_mode == "brief":
         formatted_results = [format_result_brief(r) for r in raw_results]
         total_chars = sum(len(r["first_line"]) for r in formatted_results)
@@ -1264,7 +1221,6 @@ def search_with_activation_protected(query, limit=5, max_results=10, detail_mode
         formatted_results = raw_results
         total_chars = sum(len(r["content"]) for r in formatted_results)
     
-    # Metadata
     metadata = {
         "total_activated": total_activated,
         "returned": len(formatted_results),
