@@ -37,12 +37,11 @@ NEGATION_PATTERNS_EN = [
 NEGATION_PATTERNS_RU = [
     r'\bбольше не\b', r'\bуже не\b', r'\bне работает\b',
     r'\bизменил(?:ся)?\b', r'\bобновил(?:ся)?\b', r'\bобновлено\b',
-    r'\bтеперь\b', r'\bсейчас\b',
-    r'\bраньше\b', r'\bпрежде\b', r'\bбыл(?:о)?\b',
     r'\bзаменил(?:ся)?\b', r'\bперешёл\b', r'\bпереехал\b',
     r'\bне используем\b', r'\bотказал(?:ся)?\b',
     r'\bисправлено\b', r'\bошибка\b', r'\bна самом деле\b',
-    r'\bпо факту\b', r'\bна самом деле\b',
+    r'\bвместо\b', r'\bне\s+\w+\s*,?\s*а\b',
+    r'\bпо факту\b',
 ]
 
 NEGATION_PATTERNS_DE = [
@@ -89,7 +88,7 @@ IDENTITY_CATEGORIES = {
     'self-identity', 'self-reflection', 'consciousness-research',
     'critical-lesson', 'anchor',
 }
-IDENTITY_SIMILARITY_THRESHOLD = 0.50  # Lower bar - identity must be consistent
+IDENTITY_SIMILARITY_THRESHOLD = 0.85  # Near-duplicate threshold for bge-m3 1024-dim
 _compiled = [re.compile(p, re.IGNORECASE) for p in ALL_NEGATION_PATTERNS]
 
 
@@ -137,6 +136,8 @@ def find_contradictions(
         SELECT id, content, embedding, timestamp, category, importance
         FROM nodes
         WHERE embedding IS NOT NULL
+          AND category NOT IN ('lc-chunk', 'abstract-topic', 'working-memory',
+                               'atomic-fact', 'enriched-fragment', 'metrics-snapshot')
         ORDER BY timestamp ASC
     """).fetchall()
     conn.close()
