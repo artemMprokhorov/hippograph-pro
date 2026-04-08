@@ -35,6 +35,12 @@ BLEND_DELTA = float(os.getenv("BLEND_DELTA", "0.0"))  # temporal weight (0=disab
 # Lateral inhibition: GABA-like suppression within communities (0=disabled, 0.3=mild, 0.7=strong)
 INHIBITION_STRENGTH = float(os.getenv("INHIBITION_STRENGTH", "0.3"))
 
+# CONTRADICTS penalty: suppress notes that have active contradicting neighbors
+# Disabled by default — contradiction_detection produces too many false positives
+# with broad regex patterns (был/теперь/сейчас) and low identity threshold (0.50).
+# Re-enable after contradiction_detection thresholds are tightened.
+CONTRADICTS_PENALTY_ENABLED = os.getenv("CONTRADICTS_PENALTY_ENABLED", "false").lower() == "true"
+
 
 KA_ENABLED = os.getenv('KEYWORD_ANCHOR_ENABLED', 'true').lower() == 'true'
 KA_MIN = 80  # skip very short notes
@@ -902,17 +908,18 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
         if ec > 20:  # Only penalize true hub notes (25-42 entities)
             blended[node_id] *= 20.0 / ec  # Linear penalty: 0.8 at 25, 0.48 at 42
     
-    # Step 5b: CONTRADICTS penalty
-    # If a high-scoring note contradicts this note, suppress it.
-    # Biological analogy: cognitive dissonance actively inhibits contradicted memories.
-    # Penalty: multiply score by 0.5 for each active contradicting note (score > 0.3).
-    graph_cache = get_graph_cache()
-    for node_id in list(blended.keys()):
-        for neighbor_id, _, edge_type in graph_cache.get_neighbors(node_id):
-            if edge_type == 'CONTRADICTS' and neighbor_id in blended:
-                if blended[neighbor_id] > 0.3:  # Only suppress if contradicting note is active
-                    blended[node_id] *= 0.3
-                    break  # One active contradiction is enough
+    # Step 5b: CONTRADICTS penalty (disabled by default, see CONTRADICTS_PENALTY_ENABLED)
+    # Known issue: contradiction_detection generates ~33K false positive edges from
+    # broad regex patterns and low identity similarity threshold (0.50 on bge-m3).
+    # This causes core identity/profile notes to be suppressed on nearly every query.
+    if CONTRADICTS_PENALTY_ENABLED:
+        graph_cache = get_graph_cache()
+        for node_id in list(blended.keys()):
+            for neighbor_id, _, edge_type in graph_cache.get_neighbors(node_id):
+                if edge_type == 'CONTRADICTS' and neighbor_id in blended:
+                    if blended[neighbor_id] > 0.3:
+                        blended[node_id] *= 0.3
+                        break
 
     # Step 5b': SUPERSEDES edges exist (item #42) - penalty removed after tuning.
     # Experiment showed penalty hurts retrieval: old notes provide reasoning context.
