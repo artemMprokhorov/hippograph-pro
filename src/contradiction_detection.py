@@ -137,7 +137,8 @@ def find_contradictions(
         FROM nodes
         WHERE embedding IS NOT NULL
           AND category NOT IN ('lc-chunk', 'abstract-topic', 'working-memory',
-                               'atomic-fact', 'enriched-fragment', 'metrics-snapshot')
+                               'atomic-fact', 'enriched-fragment', 'metrics-snapshot',
+                               'keyword-anchor')
         ORDER BY timestamp ASC
     """).fetchall()
     conn.close()
