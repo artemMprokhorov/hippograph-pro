@@ -372,6 +372,7 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **Evolution Analyzer (#45)** | ✅ Deployed | `evolution_analyzer.py` — periodic graph evolution analysis across snapshot DBs. Tracks nodes/edges/emergence/edge-types over time. |
 | **Abstract Topic Linking (#47)** | ✅ Deployed | `step_topic_linking_tfidf()` + `step_topic_linking_kmeans()` in sleep cycle. 76 topic nodes, 1858 BELONGS_TO edges. global_workspace: 0.412→0.647 (+0.235). |
 | **Consciousness Check (#48)** | ✅ Deployed | `consciousness_check.py` — 8 indicators from Butlin et al. 2023, IIT, GWT, Damasio. Composite: **0.885** (STRONG). Bottleneck: emotional_modulation (0.327). self_ref: 0.939, metacognition: 0.819. |
+| **Prospective Memory** | ✅ Deployed | Pending intentions with PROSPECTIVE_BOOST=0.20 — plans survive decay and surface in retrieval. CLI + MCP tools: add_intention / complete_intention. |
 | Personal Continuity Benchmark | ✅ v5 | **100% Recall@5** (April 8 2026). PCB v5: Atomic Facts 15/15, Semantic 20/20. Prior: 94.3% (April 7), 97.1% (pre-PR). Multi-model validation: 10 model instances across Anthropic + Google. |
 
 ---
