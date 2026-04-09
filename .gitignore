@@ -151,3 +151,4 @@ src/pcb_v5.py
 src/prepare_uroboros_db.py
 src/quality_bench.py
 src/retroactive_chunking*.pyRESEARCH.md
+ROADMAP_PRO.md
