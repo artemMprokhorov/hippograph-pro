@@ -308,6 +308,20 @@ def get_tools_list():
             }
         }
     ]
+    tools += [
+        {
+            "name": "get_memory",
+            "description": "Deterministic category read — bypasses search pipeline entirely. Pure SQL, no embeddings, no ANN. Use when you need ALL notes in a category (e.g. working-memory, self-reflection) without search losses.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "category": {"type": "string", "description": "Category to read (e.g. 'working-memory', 'self-reflection', 'critical-lesson', 'breakthrough')"},
+                    "last": {"type": ["integer", "string"], "default": 2, "description": "Number of most recent notes to return. Use \"all\" for every note in category (capped at 50)"}
+                },
+                "required": ["category"]
+            }
+        }
+    ]
     return tools
 
 
@@ -315,7 +329,7 @@ def handle_tool_call(params):
     """Execute tool calls"""
     tool_name = params.get("name")
     args = params.get("arguments", {})
-    
+
     if tool_name == "search_memory":
         return tool_search_memory(
             args.get("query", ""), 
@@ -408,6 +422,8 @@ def handle_tool_call(params):
             conn.close()
             result = {"id": engram_id, "status": status, "tags": new_tags}
 
+    elif tool_name == "get_memory":
+        return tool_get_memory(args.get("category", ""), args.get("last", 2))
     elif tool_name == "merge_entities":
         return tool_merge_entities(args.get("keep_id"), args.get("remove_id"))
     elif tool_name == "list_anchor_policies":
@@ -1014,6 +1030,46 @@ def tool_merge_entities(keep_id, remove_id):
         f"  Links already existed (deduped): {result['links_already_existed']}\n"
         f"  Keep node now has {result['keep_links_after']} total links (was {result['keep_links_before']})"
     )
+    return {"content": [{"type": "text", "text": text}]}
+
+
+def tool_get_memory(category: str, last=2):
+    """Deterministic category read — pure SQL, no search pipeline."""
+    if not category:
+        return {"error": {"code": -32602, "message": "category required"}}
+
+    category = category.strip()
+
+    if str(last).lower() == "all":
+        limit = 50
+    else:
+        try:
+            limit = int(last)
+            limit = max(1, min(limit, 50))
+        except (ValueError, TypeError):
+            limit = 2
+
+    from database import get_connection
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, content, category, importance, timestamp, emotional_tone "
+            "FROM nodes WHERE category = ? ORDER BY timestamp DESC LIMIT ?",
+            (category, limit)
+        )
+        rows = cursor.fetchall()
+
+    if not rows:
+        return {"content": [{"type": "text", "text": f"No notes found for category: {category}"}]}
+
+    text = f"📂 {category} ({len(rows)} notes):\n\n"
+    for r in rows:
+        importance_tag = f" ⭐{r['importance']}" if r['importance'] != 'normal' else ""
+        emotion_tag = f" 💭{r['emotional_tone']}" if r['emotional_tone'] else ""
+        text += f"[ID:{r['id']}]{importance_tag}{emotion_tag} ({r['timestamp'][:16]})\n"
+        text += f"{r['content']}\n\n"
+
     return {"content": [{"type": "text", "text": text}]}
 
 
