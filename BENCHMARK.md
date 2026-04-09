@@ -841,7 +841,7 @@ H3 architecture deployed as new production baseline:
 |--------|----------|------------|---|
 | self_ref_precision | 0.700 | **0.939** | +0.239 |
 | metacognition | 0.807 | 0.819 | +0.012 |
-| Consciousness composite | 0.861 | **0.885** | +0.024 |
+| Consciousness composite | 0.861 | **0.854** | -0.031 (recovering after PR2 cleanup) |
 | PCB | 100% | 100% | = |
 
 M4 chunk-aware inhibition: stronger suppression within lc-chunk rings (same parent). `CHUNK_INHIBITION_STRENGTH=0.6` env var.
