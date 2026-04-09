@@ -367,6 +367,8 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
 | **Keyword Anchors (H3)** | ✅ Deployed | spaCy NER + regex extraction per note → keyword-anchor node via PART_OF edge. Small-to-Big retrieval: anchor found in ANN → parent returned. Batch creation after sleep consolidation. single-hop +6pp vs D1 baseline. `KEYWORD_ANCHOR_ENABLED=true` |
 | **Working Memory Journal** | ✅ Deployed | update_working_memory MCP tool — INSERT mode (not overwrite). Each call creates new working-memory node with TEMPORAL_AFTER edge to previous. get_session_context returns last 3 entries for temporal context. Session Context MCP v3.1. |
+
+> **Session Context MCP** is an optional companion service that provides `get_session_context`, `update_session_context`, and `extract_remember_blocks` tools. Source: `session_context_mcp.py` + `Dockerfile.session-context` (307MB, python:3.11-slim). Build: `docker build -f Dockerfile.session-context -t session-context-mcp .`
 | **Online Consolidation (#40)** | ✅ Deployed | `_mini_consolidate()` at add_note: builds consolidation edges to k=15 nearest neighbours immediately. O(k) cost, zero sleep wait. |
 | **Concept Merging (#46)** | ✅ Deployed | Synonym-aware entity linking: `get_or_create_entity()` resolves aliases to canonical form (ML→machine learning, память→memory). 7998 new edges on production data. |
 | **Evolution Analyzer (#45)** | ✅ Deployed | `evolution_analyzer.py` — periodic graph evolution analysis across snapshot DBs. Tracks nodes/edges/emergence/edge-types over time. |
