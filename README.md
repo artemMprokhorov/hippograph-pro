@@ -212,7 +212,7 @@ HippoGraph treats memory the way it should be treated — with care.
 | Security | **100%** | Protocols and incidents |
 | Science | **100%** | Methodology, debugging skills, embedding compatibility |
 
-> PCB v5 (April 8 2026): **100% Recall@5** (Atomic 100%, Semantic 100%). First ever 100%. Fixed: DB_PATH default pointed to empty memory.db instead of memory_migration.db. M3 conceptual tags + correct ANN rebuild. Prior: 94.3% (April 7), 97.1% (pre-PR sm1ly).
+> PCB v5 (April 9 2026): **97.5% Recall@5** (Atomic 100%, Semantic 95%) after PR2 idempotency fix removed 2844 duplicate abstract-topic nodes. Prior peak: 100% on April 8 before cleanup. 94.3% (April 7), 97.1% (pre-PR sm1ly).
 
 ### Why LOCOMO Doesn't Tell the Full Story
 
@@ -366,12 +366,13 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
 | **Keyword Anchors (H3)** | ✅ Deployed | spaCy NER + regex extraction per note → keyword-anchor node via PART_OF edge. Small-to-Big retrieval: anchor found in ANN → parent returned. Batch creation after sleep consolidation. single-hop +6pp vs D1 baseline. `KEYWORD_ANCHOR_ENABLED=true` |
-| **Working Memory** | ✅ Deployed | update_working_memory MCP tool — single overwritable note (category: working-memory) for current session context. Loaded at session start, updated by AI inference trigger |
+| **Working Memory Journal** | ✅ Deployed | update_working_memory MCP tool — INSERT mode (not overwrite). Each call creates new working-memory node with TEMPORAL_AFTER edge to previous. get_session_context returns last 3 entries for temporal context. Session Context MCP v3.1. |
 | **Online Consolidation (#40)** | ✅ Deployed | `_mini_consolidate()` at add_note: builds consolidation edges to k=15 nearest neighbours immediately. O(k) cost, zero sleep wait. |
 | **Concept Merging (#46)** | ✅ Deployed | Synonym-aware entity linking: `get_or_create_entity()` resolves aliases to canonical form (ML→machine learning, память→memory). 7998 new edges on production data. |
 | **Evolution Analyzer (#45)** | ✅ Deployed | `evolution_analyzer.py` — periodic graph evolution analysis across snapshot DBs. Tracks nodes/edges/emergence/edge-types over time. |
 | **Abstract Topic Linking (#47)** | ✅ Deployed | `step_topic_linking_tfidf()` + `step_topic_linking_kmeans()` in sleep cycle. 76 topic nodes, 1858 BELONGS_TO edges. global_workspace: 0.412→0.647 (+0.235). |
-| **Consciousness Check (#48)** | ✅ Deployed | `consciousness_check.py` — 8 indicators from Butlin et al. 2023, IIT, GWT, Damasio. Composite: **0.885** (STRONG). Bottleneck: emotional_modulation (0.327). self_ref: 0.939, metacognition: 0.819. |
+| **Consciousness Check (#48)** | ✅ Deployed | `consciousness_check.py` — 8 indicators from Butlin et al. 2023, IIT, GWT, Damasio. Composite: **0.854** (STRONG). Bottleneck: emotional_modulation (0.327). self_ref: 0.939, metacognition: 0.637 (recovering after PR2 cleanup). |
+| **sleep_compute Idempotency (PR2)** | ✅ Deployed | sm1ly fix: abstract-topic nodes cleaned before re-clustering, synthetic categories excluded from k-means, metrics-snapshot category. Removed 2844 duplicate nodes from production. |
 | **Prospective Memory** | ✅ Deployed | Pending intentions with PROSPECTIVE_BOOST=0.20 — plans survive decay and surface in retrieval. CLI + MCP tools: add_intention / complete_intention. |
 | Personal Continuity Benchmark | ✅ v5 | **100% Recall@5** (April 8 2026). PCB v5: Atomic Facts 15/15, Semantic 20/20. Prior: 94.3% (April 7), 97.1% (pre-PR). Multi-model validation: 10 model instances across Anthropic + Google. |
 
