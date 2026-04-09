@@ -1,0 +1,14 @@
+FROM python:3.11-slim
+
+RUN pip install mcp uvicorn --quiet
+
+WORKDIR /app
+
+COPY session_context_mcp.py /app/session_context_mcp.py
+
+EXPOSE 5030
+
+ENV SESSION_API_KEY=session_dev_2026
+ENV SESSION_PORT=5030
+
+CMD ["python3", "/app/session_context_mcp.py"]
