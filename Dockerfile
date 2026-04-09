@@ -25,6 +25,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
 
 # Copy requirements and install Python dependencies
 COPY requirements.txt .
+# CPU-only torch -- avoids 2.5GB CUDA libraries in memory
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-warm jieba dictionary (Chinese word segmentation, MIT license)
