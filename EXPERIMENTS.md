@@ -62,6 +62,68 @@ Keyword anchors are lightweight routing nodes capturing key entities from notes.
 
 **Implementation:** Add keyword anchor step to sleep_compute.py AFTER consolidation, BEFORE temporal/entity edge building.
 
+### M4: Chunk-Aware Inhibition (April 9, 2026)
+Within a chunk ring (lc-chunks from the same parent), the winner takes more — other chunks in the ring are suppressed with higher strength (CHUNK_INHIBITION_STRENGTH=0.6).
+
+**Hypothesis:** Reduces intra-note noise in top-K, improves diversity.
+
+| Config | Overall | single-hop | multi-hop | temporal | open-domain |
+|--------|---------|-----------|----------|---------|------------|
+| H3 baseline | 90.8% | 91.5% | 90.3% | 65.6% | 93.6% |
+| M4 | 89.1% | 91.5% | 88.2% | 65.6% | 91.4% |
+
+**Result:** -1.7pp overall. single-hop and temporal held, multi-hop and open-domain regressed.
+
+**What went wrong:** Chunk inhibition suppresses chunks when the correct answer is *distributed* across multiple chunks of the same note — exactly the multi-hop and open-domain patterns. The inhibition that was meant to reduce noise instead cut signal.
+
+**Status:** Kept in production (PCB unaffected), but not a LOCOMO improvement.
+
+### M5: Chunk-Aware Consolidation (April 9, 2026)
+Sleep builds consolidation edges only *between* chunk rings from different sessions, skipping edges *within* the same ring. Hypothesis: intra-ring edges are noise, inter-ring edges carry signal.
+
+**Result:** ~91.1% on 1286/1540 queries before server reboot — slightly above H3. Full result pending rerun.
+
+**Status:** Promising, needs clean completion.
+
+---
+
+## sleep_compute Idempotency Bug (April 2026)
+
+**Discovered by:** community contributor (sm1ly, PR #2)
+
+**Bug:** `sleep_compute` was not idempotent — each run created new abstract-topic nodes and edges on top of previous ones. Root causes:
+1. k-means counted synthetic nodes (abstract-topic, lc-chunk, metrics-snapshot) when computing cluster count k, inflating it each run
+2. Old BELONGS_TO edges not cleaned before re-clustering — tfidf and kmeans steps conflicted
+3. metrics-snapshot nodes categorized as `milestone` (anchor-protected), pulling them into k-means
+
+**Impact:** 2844 duplicate abstract-topic nodes accumulated in production before fix.
+
+**Fix:**
+- Clean old abstract-topic nodes and edges before re-clustering (idempotent re-run)
+- Exclude synthetic categories from k-means embedding pool
+- Change metrics-snapshot category from `milestone` to `metrics-snapshot` (not anchor-protected)
+- Remove `step_topic_linking_tfidf` from pipeline (kmeans subsumes it)
+
+**Lesson:** Sleep compute must be designed as an idempotent operation from the start. Any step that creates nodes must first clean its previous outputs.
+
+---
+
+## Prospective Memory (April 9, 2026)
+
+**Concept:** A distinct category of notes for future intentions — plans, tasks, reminders — with decay protection while pending and automatic decay resumption after completion.
+
+**Implementation:**
+- Category `prospective`, tags: `pending` / `done` / `cancelled`
+- `pending` → `importance=critical` (anchor-protected, no decay)
+- `done` / `cancelled` → `importance=low` (normal decay resumes)
+- `PROSPECTIVE_BOOST=0.20` — pending notes get activation boost in spreading activation, surfacing even for loosely related queries
+- Optional `due:YYYY-MM-DD` tag → auto-marked `[OVERDUE]` after due date
+- Processed in sleep via `step_prospective_memory()`
+- CLI: `--add-intention`, `--complete-intention`, `--list-intentions`
+- MCP tools: `add_intention()`, `complete_intention()`
+
+**What we learned:** The graph naturally handles episodic (past) memory well. Prospective (future) memory requires explicit protection from decay — without it, pending intentions fade like any other note. The boost ensures plans surface proactively rather than only when explicitly searched.
+
 ---
 
 ## LOCOMO Recall@5 — Key Results
@@ -77,6 +139,8 @@ Keyword anchors are lightweight routing nodes capturing key entities from notes.
 | Apr 2 | M1 variants | 86.0-86.4% |
 | Apr 3 | M2/G cross-node overlap | 74.2-83.6% |
 | Apr 6 | H3 batch keyword anchors | **90.8%** |
+| Apr 9 | M4 chunk-aware inhibition | 89.1% |
+| Apr 9 | M5 chunk-aware consolidation | ~91.1% (partial) |
 
 **Three big jumps:** SA+hybrid (32→66%), BGE-M3+reranker (69→91%), session chunking (+21.7pp)
 
@@ -101,9 +165,10 @@ Temporal questions score ~65% across ALL experiments. Keyword anchors don't help
 | ColBERT on CPU | 2-3min/note |
 | spaCy sentencizer chunking | -5.9pp vs D1 |
 | Inline keyword anchors | -2.8pp vs batch |
+| Chunk-aware inhibition (M4) | -1.7pp overall |
 
 ---
 
-*Last updated: April 6, 2026*
-*Production: LOCOMO 91.1% (D1), PCB 97.1%*
+*Last updated: April 9, 2026*
+*Production: LOCOMO 90.8% (H3), PCB 97.5%*
 *Best experimental result: H3 single-hop 91.5%*
