@@ -841,7 +841,7 @@ def tool_search_stats():
         if stats.get("recent_zero_results"):
             lines.append(f"\n⚠️ Recent zero-result queries:")
             for zr in stats["recent_zero_results"][:5]:
-                lines.append(f"  - \"{zr['query']}\" ({zr['timestamp'][:16]})")
+                lines.append(f"  - \"{zr['query']}\" ({(zr['timestamp'] or 'unknown')[:16]})")
         
         if stats.get("total_searches_all_time", 0) == 0:
             lines.append("\nNo searches logged yet. Stats will populate after searches are made.")
@@ -1067,7 +1067,7 @@ def tool_get_memory(category: str, last=2):
     for r in rows:
         importance_tag = f" ⭐{r['importance']}" if r['importance'] != 'normal' else ""
         emotion_tag = f" 💭{r['emotional_tone']}" if r['emotional_tone'] else ""
-        text += f"[ID:{r['id']}]{importance_tag}{emotion_tag} ({r['timestamp'][:16]})\n"
+        text += f"[ID:{r['id']}]{importance_tag}{emotion_tag} ({(r['timestamp'] or 'unknown')[:16]})\n"
         text += f"{r['content']}\n\n"
 
     return {"content": [{"type": "text", "text": text}]}
