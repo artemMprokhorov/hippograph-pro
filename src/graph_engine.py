@@ -200,7 +200,7 @@ def _mini_consolidate(engram_id, top_k=15, threshold=0.75):
         # Get embedding of the new note
         with get_connection() as conn:
             row = conn.execute(
-                'SELECT embedding FROM engrams WHERE id=?', (engram_id,)
+                'SELECT embedding FROM nodes WHERE id=?', (engram_id,)
             ).fetchone()
         if not row or not row[0]:
             return 0
@@ -431,13 +431,13 @@ def add_engram_with_links(content, category="general", importance="normal", forc
     try:
         node_t_event = None
         with get_connection() as _tc:
-            _row = _tc.execute('SELECT t_event_start FROM engrams WHERE id=?', (engram_id,)).fetchone()
+            _row = _tc.execute('SELECT t_event_start FROM nodes WHERE id=?', (engram_id,)).fetchone()
             if _row:
                 node_t_event = _row[0]
         if node_t_event:
             with get_connection() as _tc:
                 _neighbors = _tc.execute(
-                    """SELECT id, t_event_start FROM engrams
+                    """SELECT id, t_event_start FROM nodes
                        WHERE t_event_start IS NOT NULL AND id != ?
                        ORDER BY ABS(julianday(t_event_start) - julianday(?)) ASC
                        LIMIT 6""",
@@ -455,7 +455,7 @@ def add_engram_with_links(content, category="general", importance="normal", forc
         print(f'Temporal edge creation skipped: {_te}')
 
     result = {
-        "engram_id": engram_id,
+        "note_id": engram_id,
         "entities": entities,
         "entity_links": len(set(entity_links)),
         "semantic_links": len(semantic_links),
@@ -607,7 +607,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     activations = {}
     semantic_sims = {}  # Preserve raw semantic similarities for blend scoring
     
-    if ann_index.enabled and len(ann_index.engram_ids) > 0:
+    if ann_index.enabled and len(ann_index.node_ids) > 0:
         # Fast ANN search
         results = ann_index.search(query_emb, k=limit*3, min_similarity=0.0)
         for engram_id, sim in results:
@@ -858,7 +858,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
             if query_temporal["t_event_start"] and query_temporal["t_event_end"]:
                 with get_connection() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT id, t_event_start, t_event_end FROM engrams WHERE t_event_start IS NOT NULL")
+                    cursor.execute("SELECT id, t_event_start, t_event_end FROM nodes WHERE t_event_start IS NOT NULL")
                     for row in cursor.fetchall():
                         nid, ns, ne = row
                         overlap = compute_temporal_overlap(
@@ -875,7 +875,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                     with get_connection() as conn:
                         cursor = conn.cursor()
                         placeholders = ','.join('?' * len(candidate_ids))
-                        cursor.execute(f"SELECT id, timestamp, t_event_start FROM engrams WHERE id IN ({placeholders})", 
+                        cursor.execute(f"SELECT id, timestamp, t_event_start FROM nodes WHERE id IN ({placeholders})", 
                                       list(candidate_ids))
                         for row in cursor.fetchall():
                             nid = row[0]
@@ -960,7 +960,6 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     CHUNK_INHIBITION = float(os.getenv('CHUNK_INHIBITION_STRENGTH', '0.6'))  # stronger than community
     if CHUNK_INHIBITION > 0 and blended:
         try:
-            from database import get_connection
             # Build parent -> [child_ids] map for lc-chunk nodes
             lc_ids = [nid for nid in blended if True]  # will filter below
             with get_connection() as _conn:
@@ -968,7 +967,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 _rows = _conn.execute(
                     "SELECT e.source_id as child_id, e.target_id as parent_id "
                     "FROM edges e "
-                    "JOIN engrams n ON n.id = e.source_id "
+                    "JOIN nodes n ON n.id = e.source_id "
                     "WHERE e.edge_type = 'PART_OF' "
                     "AND n.category = 'lc-chunk' "
                     "AND e.source_id IN ({})" .format(
@@ -1053,7 +1052,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                         with get_connection() as conn_p:
                             row = conn_p.execute(
                                 'SELECT id, content, category, importance, emotional_tone, '
-                                'emotional_intensity, timestamp FROM engrams WHERE id=?',
+                                'emotional_intensity, timestamp FROM nodes WHERE id=?',
                                 (parent_id,)
                             ).fetchone()
                             if row:
@@ -1086,7 +1085,7 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
                 has_entity_type = conn.execute("""
                     SELECT 1 FROM node_entities ne
                     JOIN entities e ON ne.entity_id = e.id
-                    WHERE ne.engram_id = ? AND e.entity_type = ?
+                    WHERE ne.node_id = ? AND e.entity_type = ?
                     LIMIT 1
                 """, (engram_id, entity_type_filter)).fetchone()
             
@@ -1136,13 +1135,13 @@ def search_with_activation(query, limit=5, iterations=ACTIVATION_ITERATIONS, dec
     return results, total_activated
 
 
-def get_node_graph(engram_id):
+def get_node_graph(note_id):
     """Get graph visualization data for a specific node"""
-    node = get_node(engram_id)
+    node = get_node(note_id)
     if not node:
         return {"error": "Node not found"}
     
-    connected = get_connected_nodes(engram_id)
+    connected = get_connected_nodes(note_id)
     
     return {
         "node": {
@@ -1234,3 +1233,5 @@ def search_with_activation_protected(query, limit=5, max_results=10, detail_mode
         "results": formatted_results,
         "metadata": metadata
     }
+# Aliases for API compatibility
+add_note_with_links = add_engram_with_links

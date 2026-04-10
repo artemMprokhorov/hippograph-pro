@@ -9,8 +9,8 @@ Usage:
   hippograph status
   hippograph sleep
   hippograph pcb
-  hippograph graph <engram_id>
-  hippograph get <engram_id>
+  hippograph graph <note_id>
+  hippograph get <note_id>
   hippograph repl
 
 Env vars:
@@ -133,7 +133,7 @@ def cmd_add(args):
     if args.tone:
         payload['emotional_tone'] = args.tone
 
-    r = api_post('/api/add_engram', payload)
+    r = api_post('/api/add_note', payload)
 
     if args.json:
         print(json.dumps(r, ensure_ascii=False, indent=2))
@@ -147,7 +147,7 @@ def cmd_add(args):
             print(c('red', f"❌ Error: {r['error']}"))
         return
 
-    eid = r.get('engram_id', '?')
+    eid = r.get('note_id', '?')
     entities = r.get('entities', [])
     chunks = r.get('late_chunks', 0)
     print(c('green', f'✅ Added note #{eid}'))
@@ -227,14 +227,14 @@ def cmd_sleep(args):
             print(c('yellow', '\n   Watching stopped (sleep still running)'))
 
 def cmd_graph(args):
-    r = api_post('/api/get_graph', {'engram_id': int(args.engram_id)})
+    r = api_post('/api/get_graph', {'note_id': int(args.note_id)})
     if args.json:
         print(json.dumps(r, ensure_ascii=False, indent=2))
         return
 
     node = r.get('node', {})
     connections = r.get('connections', [])
-    print(c('bold', f'\n🕸️  Graph for #{args.engram_id}'))
+    print(c('bold', f'\n🕸️  Graph for #{args.note_id}'))
     print(c('cyan', f'  Content: {node.get("content", "")[:100]}'))
     print(c('gray', f'  Category: {node.get("category", "?")}'))
     print()
@@ -256,12 +256,12 @@ def cmd_graph(args):
     print()
 
 def cmd_get(args):
-    r = api_post('/api/engram/' + str(args.engram_id), method='GET')
+    r = api_post('/api/engram/' + str(args.note_id), method='GET')
     if args.json:
         print(json.dumps(r, ensure_ascii=False, indent=2))
         return
     engram = r.get('engram', r)
-    print(c('bold', f'\n📝 Note #{args.engram_id}'))
+    print(c('bold', f'\n📝 Note #{args.note_id}'))
     for k, v in engram.items():
         if k == 'embedding':
             v = f'<{len(str(v))} chars>'
@@ -336,9 +336,9 @@ def cmd_repl(args):
             elif cmd == 'sleep':
                 cmd_sleep(argparse.Namespace(json=False, no_wait=True))
             elif cmd == 'graph':
-                cmd_graph(argparse.Namespace(engram_id=rest, json=False))
+                cmd_graph(argparse.Namespace(note_id=rest, json=False))
             elif cmd == 'get':
-                cmd_get(argparse.Namespace(engram_id=rest, json=False))
+                cmd_get(argparse.Namespace(note_id=rest, json=False))
             elif cmd == 'pcb':
                 cmd_pcb(argparse.Namespace())
             elif cmd == 'status':
@@ -406,11 +406,11 @@ Env vars:
     p.add_argument('--json', action='store_true')
 
     p = sub.add_parser('graph', help='Show graph connections for a note')
-    p.add_argument('engram_id')
+    p.add_argument('note_id')
     p.add_argument('--json', action='store_true')
 
     p = sub.add_parser('get', help='Get note by ID')
-    p.add_argument('engram_id')
+    p.add_argument('note_id')
     p.add_argument('--json', action='store_true')
 
     sub.add_parser('pcb', help='Quick memory check')

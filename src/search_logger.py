@@ -85,6 +85,21 @@ class SearchLogger:
         try:
             conn = sqlite3.connect(DB_PATH)
             conn.executescript(SCHEMA)
+            # Migration: add columns added after initial schema
+            migrations = [
+                "ALTER TABLE search_logs ADD COLUMN top1_engram_id INTEGER",
+                "ALTER TABLE search_logs ADD COLUMN top5_scores TEXT",
+                "ALTER TABLE search_logs ADD COLUMN blend_delta REAL",
+                "ALTER TABLE search_logs ADD COLUMN bm25_matches INTEGER",
+                "ALTER TABLE search_logs ADD COLUMN temporal_matches INTEGER",
+                "ALTER TABLE search_logs ADD COLUMN rerank_enabled INTEGER DEFAULT 0",
+            ]
+            for sql in migrations:
+                try:
+                    conn.execute(sql)
+                except Exception:
+                    pass  # column already exists
+            conn.commit()
             conn.close()
         except Exception as e:
             print(f"⚠️ SearchLogger schema init failed: {e}")

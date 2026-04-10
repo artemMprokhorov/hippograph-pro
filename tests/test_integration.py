@@ -23,13 +23,19 @@ class TestDatabaseOperations:
         os.environ['DB_PATH'] = self.db_path
         # Re-import to use test DB
         import database
+        database.DB_PATH = self.db_path  # override module-level path
         database._connection = None
         database.init_database()
         self.db = database
 
     def teardown_method(self):
         os.close(self.db_fd)
-        os.unlink(self.db_path)
+        try:
+            os.unlink(self.db_path)
+        except Exception:
+            pass
+        # Reset DB_PATH to avoid polluting other tests
+        os.environ.pop('DB_PATH', None)
 
     def test_schema_tables_exist(self):
         """All required tables created"""
@@ -84,7 +90,7 @@ class TestModuleImports:
         """Requires torch — slow to import"""
         import graph_engine
         assert hasattr(graph_engine, 'search_with_activation')
-        assert hasattr(graph_engine, 'add_note')
+        assert hasattr(graph_engine, 'add_engram_with_links')  # renamed from add_note
 
     def test_import_ann_index(self):
         import ann_index

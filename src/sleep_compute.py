@@ -159,19 +159,19 @@ def step_keyword_anchors(db_path, dry_run=False):
     conn = _sq.connect(db_path)
     conn.row_factory = _sq.Row
 
-    old = conn.execute("SELECT COUNT(*) FROM engrams WHERE category='keyword-anchor'").fetchone()[0]
+    old = conn.execute("SELECT COUNT(*) FROM nodes WHERE category='keyword-anchor'").fetchone()[0]
     if old > 0:
         print(f'  Removing {old} old keyword-anchor nodes...')
         if not dry_run:
-            conn.execute("DELETE FROM edges WHERE source_id IN (SELECT id FROM engrams WHERE category='keyword-anchor')")
-            conn.execute("DELETE FROM edges WHERE target_id IN (SELECT id FROM engrams WHERE category='keyword-anchor')")
-            conn.execute("DELETE FROM engrams WHERE category='keyword-anchor'")
+            conn.execute("DELETE FROM edges WHERE source_id IN (SELECT id FROM nodes WHERE category='keyword-anchor')")
+            conn.execute("DELETE FROM edges WHERE target_id IN (SELECT id FROM nodes WHERE category='keyword-anchor')")
+            conn.execute("DELETE FROM nodes WHERE category='keyword-anchor'")
             conn.commit()
 
     skip_list = list(SKIP_CATS)
     ph = ','.join(['?'] * len(skip_list))
     q = ("SELECT id, category, content, timestamp, emotional_intensity, emotional_tone "
-         "FROM engrams WHERE category NOT IN (" + ph + ") "
+         "FROM nodes WHERE category NOT IN (" + ph + ") "
          "AND length(content) >= ? ORDER BY id ASC")
     nodes = [dict(n) for n in conn.execute(q, skip_list + [MIN_CONTENT]).fetchall()]
     print(f'  Nodes to process: {len(nodes)}')
@@ -196,7 +196,7 @@ def step_keyword_anchors(db_path, dry_run=False):
             if norm > 0:
                 emb = emb / norm
             conn.execute(
-                "INSERT INTO engrams (content, category, embedding, importance, "
+                "INSERT INTO nodes (content, category, embedding, importance, "
                 "emotional_tone, emotional_intensity, timestamp, tags) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (anchor_text[:300], 'keyword-anchor', emb.astype(_np.float32).tobytes(),
@@ -248,7 +248,7 @@ def step_pagerank(db_path, dry_run=False):
     from graph_metrics import GraphMetrics
 
     conn = sqlite3.connect(db_path)
-    nodes = [r[0] for r in conn.execute("SELECT id FROM engrams").fetchall()]
+    nodes = [r[0] for r in conn.execute("SELECT id FROM nodes").fetchall()]
     edges = conn.execute(
         "SELECT source_id, target_id, weight FROM edges"
     ).fetchall()
@@ -316,7 +316,7 @@ def step_relation_extraction(db_path, dry_run=False, batch_size=5, limit=20):
     last_sleep_ts = last_sleep[0] if last_sleep else "1970-01-01"
 
     rows = conn.execute("""
-        SELECT id, content FROM engrams
+        SELECT id, content FROM nodes
         WHERE timestamp > ?
         ORDER BY timestamp ASC
         LIMIT ?
@@ -340,7 +340,7 @@ def step_relation_extraction(db_path, dry_run=False, batch_size=5, limit=20):
     # Build entity -> node_id index for matching
     # Use existing entities table to find which nodes contain which entities
     entity_rows = conn.execute("""
-        SELECT ne.engram_id, e.name, e.entity_type
+        SELECT ne.node_id, e.name, e.entity_type
         FROM node_entities ne
         JOIN entities e ON ne.entity_id = e.id
     """).fetchall()
@@ -475,7 +475,7 @@ def step_spacy_relations(db_path, dry_run=False):
     # For each node: get all entity types present
     node_entity_types = {}
     rows = conn.execute("""
-        SELECT ne.engram_id, e.entity_type
+        SELECT ne.node_id, e.entity_type
         FROM node_entities ne
         JOIN entities e ON ne.entity_id = e.id
         WHERE e.entity_type IS NOT NULL
@@ -497,7 +497,7 @@ def step_spacy_relations(db_path, dry_run=False):
     entity_nodes = {}
     entity_type_map = {}
     full_rows = conn.execute("""
-        SELECT ne.engram_id, ne.entity_id, e.entity_type
+        SELECT ne.node_id, ne.entity_id, e.entity_type
         FROM node_entities ne
         JOIN entities e ON ne.entity_id = e.id
         WHERE e.entity_type IS NOT NULL
@@ -569,7 +569,7 @@ def step_orphan_cleanup(db_path, dry_run=False):
     # Find notes with 0 or 1 edges
     orphans = conn.execute("""
         SELECT n.id, n.category, LENGTH(n.content) as len
-        FROM engrams n
+        FROM nodes n
         LEFT JOIN (
             SELECT source_id as nid, COUNT(*) as cnt FROM edges GROUP BY source_id
             UNION ALL
@@ -631,7 +631,7 @@ def get_protected_categories(db_path: str) -> set:
         critical_cats = conn.execute(
             """
             SELECT category, COUNT(*) as cnt
-            FROM engrams
+            FROM nodes
             WHERE importance = 'critical'
             GROUP BY category
             HAVING cnt >= 1
@@ -643,7 +643,7 @@ def get_protected_categories(db_path: str) -> set:
 
         # Layer 3b: keyword match in category name -> auto-protect
         all_cats = conn.execute(
-            "SELECT DISTINCT category FROM engrams WHERE category IS NOT NULL"
+            "SELECT DISTINCT category FROM nodes WHERE category IS NOT NULL"
         ).fetchall()
         for (cat,) in all_cats:
             if not cat or cat in categories:
@@ -759,9 +759,9 @@ def step_stale_decay(db_path, dry_run=False):
         SELECT COUNT(*) FROM edges e
         WHERE e.created_at < ? AND e.weight > 0.3
           AND (
-            EXISTS (SELECT 1 FROM engrams n WHERE n.id = e.source_id AND n.category IN ({}))
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = e.source_id AND n.category IN ({}))
             OR
-            EXISTS (SELECT 1 FROM engrams n WHERE n.id = e.target_id AND n.category IN ({}))
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = e.target_id AND n.category IN ({}))
           )
     """.format(
         ",".join("?" * len(PROTECTED_CATEGORIES)),
@@ -780,9 +780,9 @@ def step_stale_decay(db_path, dry_run=False):
         UPDATE edges SET weight = weight * 0.95
         WHERE created_at < ? AND weight > 0.3
           AND NOT (
-            EXISTS (SELECT 1 FROM engrams n WHERE n.id = source_id AND n.category IN ({}))
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = source_id AND n.category IN ({}))
             OR
-            EXISTS (SELECT 1 FROM engrams n WHERE n.id = target_id AND n.category IN ({}))
+            EXISTS (SELECT 1 FROM nodes n WHERE n.id = target_id AND n.category IN ({}))
           )
     """.format(
         ",".join("?" * len(PROTECTED_CATEGORIES)),
@@ -807,7 +807,7 @@ def step_boost_anchor_importance(db_path, dry_run=False):
 
     # Find protected notes that aren't critical
     candidates = conn.execute("""
-        SELECT id, category, importance FROM engrams
+        SELECT id, category, importance FROM nodes
         WHERE category IN ({})
           AND importance != 'critical'
     """.format(",".join("?" * len(PROTECTED_CATEGORIES))),
@@ -821,7 +821,7 @@ def step_boost_anchor_importance(db_path, dry_run=False):
 
     ids = [row[0] for row in candidates]
     conn.execute("""
-        UPDATE engrams SET importance = 'critical'
+        UPDATE nodes SET importance = 'critical'
         WHERE id IN ({})
     """.format(",".join("?" * len(ids))), ids)
 
@@ -837,7 +837,7 @@ def step_duplicate_scan(db_path, dry_run=False):
     import numpy as np
     conn = sqlite3.connect(db_path)
     rows = conn.execute(
-        "SELECT id, embedding FROM engrams WHERE embedding IS NOT NULL"
+        "SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL"
     ).fetchall()
     conn.close()
 
@@ -968,14 +968,14 @@ def step_entity_merge(db_path, dry_run=False):
         alias_notes = set()
         for eid in alias_eids:
             rows = conn.execute(
-                "SELECT engram_id FROM node_entities WHERE entity_id = ?", (eid,)
+                "SELECT node_id FROM node_entities WHERE entity_id = ?", (eid,)
             ).fetchall()
             alias_notes.update(r[0] for r in rows)
 
         canonical_notes = set()
         for eid in canonical_eids:
             rows = conn.execute(
-                "SELECT engram_id FROM node_entities WHERE entity_id = ?", (eid,)
+                "SELECT node_id FROM node_entities WHERE entity_id = ?", (eid,)
             ).fetchall()
             canonical_notes.update(r[0] for r in rows)
 
@@ -1033,7 +1033,7 @@ def step_supersedes_scan(db_path, dry_run=False):
 
     # Load embeddings + metadata
     rows = conn.execute(
-        "SELECT id, embedding, timestamp, importance FROM engrams WHERE embedding IS NOT NULL"
+        "SELECT id, embedding, timestamp, importance FROM nodes WHERE embedding IS NOT NULL"
     ).fetchall()
 
     # Load entity links: node_id -> set of entity_ids
@@ -1168,7 +1168,7 @@ def step_generalizes_instantiates(db_path, dry_run=False):
 
     conn = sqlite3.connect(db_path)
     rows = conn.execute("""
-        SELECT id, category, embedding FROM engrams
+        SELECT id, category, embedding FROM nodes
         WHERE embedding IS NOT NULL
         AND category IN ({concrete} , {abstract})
     """.format(
@@ -1238,7 +1238,7 @@ def step_emotional_resonance(db_path, dry_run=False):
 
     conn = sqlite3.connect(db_path)
     rows = conn.execute("""
-        SELECT id, emotional_tone FROM engrams
+        SELECT id, emotional_tone FROM nodes
         WHERE emotional_tone IS NOT NULL AND emotional_tone != ''
     """).fetchall()
     conn.close()
@@ -1320,7 +1320,7 @@ def step_emergence_check(db_path, dry_run=False):
     # === Signal 1: Convergence without external query ===
     # Pick 5 random seed nodes, run mini spreading activation via edges,
     # measure how quickly activation concentrates on top-1 node.
-    node_ids = [r[0] for r in conn.execute("SELECT id FROM engrams").fetchall()]
+    node_ids = [r[0] for r in conn.execute("SELECT id FROM nodes").fetchall()]
     edges_raw = conn.execute(
         "SELECT source_id, target_id, weight FROM edges"
     ).fetchall()
@@ -1424,7 +1424,7 @@ def step_emergence_check(db_path, dry_run=False):
     # Load embeddings — exclude anchors and chunks (they pollute self-ref cosine search)
     EXCLUDE_CATS = ('keyword-anchor', 'lc-chunk', 'abstract-topic', 'atomic-fact')
     emb_rows = conn.execute(
-        "SELECT id, category, embedding FROM engrams WHERE embedding IS NOT NULL"
+        "SELECT id, category, embedding FROM nodes WHERE embedding IS NOT NULL"
         " AND category NOT IN (?,?,?,?)",
         EXCLUDE_CATS
     ).fetchall()
@@ -1538,7 +1538,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
     try:
         # Get all cluster summaries
         clusters = conn.execute(
-            'SELECT id, representative_engram_id, cluster_size FROM cluster_summaries'
+            'SELECT id, representative_node_id, cluster_size FROM cluster_summaries'
         ).fetchall()
 
         if not clusters:
@@ -1549,7 +1549,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
         # Idempotency: clean old abstract-topic nodes and edges before recreating
         if not dry_run:
             old_topic_ids = [r[0] for r in conn.execute(
-                "SELECT id FROM engrams WHERE category='abstract-topic'"
+                "SELECT id FROM nodes WHERE category='abstract-topic'"
             ).fetchall()]
             if old_topic_ids:
                 placeholders = ','.join('?' * len(old_topic_ids))
@@ -1560,16 +1560,16 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
 
             conn.execute(
                 "DELETE FROM edges WHERE edge_type='BELONGS_TO' AND ("
-                "source_id IN (SELECT id FROM engrams WHERE category='abstract-topic') OR "
-                "target_id IN (SELECT id FROM engrams WHERE category='abstract-topic'))"
+                "source_id IN (SELECT id FROM nodes WHERE category='abstract-topic') OR "
+                "target_id IN (SELECT id FROM nodes WHERE category='abstract-topic'))"
             )  # reset both variants
 
         # Get all nodes with their community (via cluster representative lookup)
         # We use spreading activation cluster membership from community detection
         # community_label stored in edges or via PageRank clusters
-        # Use cluster_summaries.representative_engram_id as anchor
+        # Use cluster_summaries.representative_node_id as anchor
         # For each cluster: find all nodes via consolidation edges to representative
-        nodes_all = conn.execute('SELECT id, content FROM engrams').fetchall()
+        nodes_all = conn.execute('SELECT id, content FROM nodes').fetchall()
         node_content = {r[0]: r[1] or '' for r in nodes_all}
 
         # Build community map via existing community structure
@@ -1649,7 +1649,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
 
             # Check if topic node already exists
             existing = conn.execute(
-                "SELECT id FROM engrams WHERE category='abstract-topic' "
+                "SELECT id FROM nodes WHERE category='abstract-topic' "
                 "AND content LIKE ?",
                 (f'%TF-IDF): {topic_label}%',)
             ).fetchone()
@@ -1662,7 +1662,7 @@ def step_topic_linking_tfidf(db_path, dry_run=False, min_cluster_size=3):
                 )
             else:
                 conn.execute(
-                    'INSERT INTO engrams (content, category, importance, emotional_intensity, timestamp) '
+                    'INSERT INTO nodes (content, category, importance, emotional_intensity, timestamp) '
                     'VALUES (?, ?, ?, ?, ?)',
                     (topic_content, 'abstract-topic', 'critical', 3, __import__('datetime').datetime.now().isoformat())
                 )
@@ -1734,7 +1734,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
     try:
         # Load all embeddings
         nodes = conn.execute(
-            "SELECT id, embedding FROM engrams WHERE embedding IS NOT NULL ""AND category NOT IN ('abstract-topic', 'lc-chunk', 'working-memory', ""'atomic-fact', 'enriched-fragment', 'metrics-snapshot')"
+            "SELECT id, embedding FROM nodes WHERE embedding IS NOT NULL ""AND category NOT IN ('abstract-topic', 'lc-chunk', 'working-memory', ""'atomic-fact', 'enriched-fragment', 'metrics-snapshot')"
         ).fetchall()
 
         if len(nodes) < 10:
@@ -1780,7 +1780,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
         # BELONGS_TO already reset by tfidf step or do it here
         # Idempotency: clean old abstract-topic nodes and edges before recreating
         old_topic_ids = [r[0] for r in conn.execute(
-            "SELECT id FROM engrams WHERE category='abstract-topic'"
+            "SELECT id FROM nodes WHERE category='abstract-topic'"
         ).fetchall()]
         if old_topic_ids:
             placeholders = ','.join('?' * len(old_topic_ids))
@@ -1791,8 +1791,8 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
 
         conn.execute(
             "DELETE FROM edges WHERE edge_type='BELONGS_TO' AND ("
-            "source_id IN (SELECT id FROM engrams WHERE category='abstract-topic') OR "
-            "target_id IN (SELECT id FROM engrams WHERE category='abstract-topic'))"
+            "source_id IN (SELECT id FROM nodes WHERE category='abstract-topic') OR "
+            "target_id IN (SELECT id FROM nodes WHERE category='abstract-topic'))"
         )
 
         topic_nodes_created = 0
@@ -1807,7 +1807,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
 
             # Get sample content for topic label
             samples = conn.execute(
-                'SELECT content FROM engrams WHERE id IN ({}) LIMIT 3'.format(
+                'SELECT content FROM nodes WHERE id IN ({}) LIMIT 3'.format(
                     ','.join('?' * len(cluster_node_ids[:5]))
                 ),
                 cluster_node_ids[:5]
@@ -1832,7 +1832,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
 
             # Create or update topic node
             existing = conn.execute(
-                "SELECT id FROM engrams WHERE category='abstract-topic' "
+                "SELECT id FROM nodes WHERE category='abstract-topic' "
                 "AND content LIKE ?",
                 (f'%K-means%Cluster {cluster_idx}/{k}%',)
             ).fetchone()
@@ -1843,7 +1843,7 @@ def step_topic_linking_kmeans(db_path, dry_run=False, n_topics=None):
                              (topic_content, topic_node_id))
             else:
                 conn.execute(
-                    'INSERT INTO engrams (content, category, importance, emotional_intensity, timestamp) '
+                    'INSERT INTO nodes (content, category, importance, emotional_intensity, timestamp) '
                     'VALUES (?, ?, ?, ?, ?)',
                     (topic_content, 'abstract-topic', 'critical', 3, __import__('datetime').datetime.now().isoformat())
                 )
@@ -1987,7 +1987,7 @@ def step_atomic_facts(db_path, dry_run=False, max_notes=50):
         )
 
         rows = conn.execute(
-            'SELECT id, content, category FROM engrams '
+            'SELECT id, content, category FROM nodes '
             'WHERE category NOT IN ({}) '
             'ORDER BY id DESC LIMIT ?'.format(
                 ','.join("'" + s + "'" for s in SKIP)
@@ -2024,7 +2024,7 @@ def step_atomic_facts(db_path, dry_run=False, max_notes=50):
 
                 # Check duplicate
                 existing = conn.execute(
-                    "SELECT id FROM engrams WHERE category='atomic-fact' AND content=?",
+                    "SELECT id FROM nodes WHERE category='atomic-fact' AND content=?",
                     (fact_content,)
                 ).fetchone()
 
@@ -2032,7 +2032,7 @@ def step_atomic_facts(db_path, dry_run=False, max_notes=50):
                     fact_id = existing[0]
                 else:
                     conn.execute(
-                        'INSERT INTO engrams (content, category, importance, '
+                        'INSERT INTO nodes (content, category, importance, '
                         'emotional_intensity, timestamp) VALUES (?, ?, ?, ?, ?)',
                         (fact_content, 'atomic-fact', 'normal', 1, now)
                     )
@@ -2206,7 +2206,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
 
         rows = conn.execute(
             'SELECT id, content, category, emotional_tone, '  
-            'emotional_reflection, importance FROM engrams '
+            'emotional_reflection, importance FROM nodes '
             'WHERE category NOT IN ({skip}) '
             'ORDER BY id DESC LIMIT {lim}'.format(
                 skip=','.join('"' + s + '"' for s in SKIP),
@@ -2254,7 +2254,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
 
                 # Check duplicate
                 existing = conn.execute(
-                    "SELECT id FROM engrams WHERE category='enriched-fragment' "
+                    "SELECT id FROM nodes WHERE category='enriched-fragment' "
                     "AND content=?", (frag_content,)
                 ).fetchone()
 
@@ -2274,7 +2274,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
                     except Exception:
                         emb_bytes = None
                     conn.execute(
-                        'INSERT INTO engrams '
+                        'INSERT INTO nodes '
                         '(content, category, importance, emotional_intensity,'
                         ' emotional_tone, timestamp, embedding) '
                         'VALUES (?, ?, ?, ?, ?, ?, ?)',
@@ -2313,7 +2313,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
             # VARIANT 2: delete parent
             elif not dry_run and variant == 2 and frags:
                 conn.execute(
-                    "DELETE FROM engrams WHERE id=?", (parent_id,)
+                    "DELETE FROM nodes WHERE id=?", (parent_id,)
                 )
                 conn.execute(
                     "DELETE FROM edges WHERE source_id=? OR target_id=?",
@@ -2330,7 +2330,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
                 ann = get_ann_index()
                 if ann.enabled and ann.index and ann.index.get_current_count() > 0:
                     new_frags = conn.execute(
-                        "SELECT id, embedding FROM engrams WHERE category='enriched-fragment' "
+                        "SELECT id, embedding FROM nodes WHERE category='enriched-fragment' "
                         "AND embedding IS NOT NULL"
                     ).fetchall()
                     semantic_links = 0
@@ -2341,7 +2341,7 @@ def step_enriched_fragments(db_path, dry_run=False, variant=1, max_notes=200):
                             if neighbor_id == frag_id:
                                 continue
                             cat = conn.execute(
-                                'SELECT category FROM engrams WHERE id=?', (neighbor_id,)
+                                'SELECT category FROM nodes WHERE id=?', (neighbor_id,)
                             ).fetchone()
                             if not cat or cat[0] in ('enriched-fragment', 'abstract-topic', 'atomic-fact'):
                                 continue

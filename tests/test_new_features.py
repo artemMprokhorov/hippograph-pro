@@ -372,7 +372,7 @@ class TestGeneralizesInstantiates:
 
     def test_creates_generalizes_and_instantiates(self, tmp_path):
         """Similar concrete+abstract pair: step reports 2 edges (GENERALIZES + INSTANTIATES)."""
-        import sys
+        import sys, database
         sys.path.insert(0, '/app/src')
         v1, v2 = self._similar_vec()
         db = self._make_db(tmp_path, [
@@ -385,8 +385,14 @@ class TestGeneralizesInstantiates:
         assert result['pairs_checked'] == 1
         assert result['would_create'] == 2  # GENERALIZES + INSTANTIATES
         # Verify direction logic: concrete→abstract = GENERALIZES
-        result2 = step_generalizes_instantiates(db, dry_run=False)
-        assert result2['edges_created'] == 2
+        # Patch database.DB_PATH so create_edge writes to test DB
+        orig_db_path = database.DB_PATH
+        try:
+            database.DB_PATH = db
+            result2 = step_generalizes_instantiates(db, dry_run=False)
+            assert result2['edges_created'] == 2
+        finally:
+            database.DB_PATH = orig_db_path
 
     def test_dry_run_creates_no_edges(self, tmp_path):
         import sys, sqlite3
