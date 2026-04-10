@@ -8,6 +8,13 @@ All notable changes to HippoGraph Pro are documented here.
 
 ---
 
+## [April 10, 2026]
+
+### Fixed
+- **Dedup false positives from internal categories (PR by @sm1ly)** — `add_engram_with_links` was blocking new root-level notes whose embeddings sat above `DUPLICATE_THRESHOLD=0.95` against an existing parent's `lc-chunk` (late chunking fragment), even though the new note and the chunk were distinct documents. Observed during a 155-file wiki rebuild: `12.02 федеративная игра: архитектурное видение` and `44.04 Talkman — Live Edition Spec` were both rejected, each blocked by an lc-chunk of a different parent at similarity 0.96. Fix adds `DUPLICATE_CHECK_EXCLUDE = {'lc-chunk', 'keyword-anchor', 'abstract-topic', 'atomic-fact', 'metrics-snapshot'}` and refactors the duplicate check in both the ANN path (k raised from 5 to 20, iterate + skip internal categories) and the linear-scan fallback. `force=True` continues to bypass the check entirely, and `find_similar_notes` / `/api/find_similar` are intentionally untouched — their contract is to surface lc-chunks to external consumers (libbro dedup tooling). Regression test at cos=0.97 between two real concepts confirms genuine near-duplicates are still blocked. See `tests/test_dedup_skip_internal.py` for the full five-case suite. TZ: `technical_tasks/2026-04-10_hippograph_dedup_skip_internal.md`.
+
+---
+
 ## [April 9, 2026]
 
 ### Added
