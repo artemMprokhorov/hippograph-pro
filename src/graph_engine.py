@@ -140,6 +140,33 @@ def importance_factor(importance, access_count=0):
 DUPLICATE_THRESHOLD = float(os.getenv("DUPLICATE_THRESHOLD", "0.95"))  # Block creation
 SIMILAR_THRESHOLD = float(os.getenv("SIMILAR_THRESHOLD", "0.90"))  # Warn about similar
 
+# Categories excluded from the duplicate detection candidate pool.
+#
+# These represent fragments, derivations, or internal computations of other
+# content rather than standalone notes. Including them as duplicate candidates
+# causes false positives: for example, a late-chunk of an existing parent note
+# has near-identical embedding to any new root note discussing the same topic,
+# so any related concept gets blocked as a duplicate even though the new note
+# is a distinct document.
+#
+#   lc-chunk         — late-chunking child, literal fragment of a parent note
+#   keyword-anchor   — Small-to-Big anchor generated from a parent note
+#   abstract-topic   — synthetic theme created during sleep_compute consolidation
+#   atomic-fact      — decomposed fact extracted during sleep_compute
+#   metrics-snapshot — service node emitted by sleep_compute metrics step
+DUPLICATE_CHECK_EXCLUDE = {
+    'lc-chunk',
+    'keyword-anchor',
+    'abstract-topic',
+    'atomic-fact',
+    'metrics-snapshot',
+}
+
+# ANN candidate pool size for duplicate detection. Larger than the legacy k=5
+# so that after filtering out internal categories enough real candidates remain
+# to catch genuine duplicates. O(log N) cost in HNSW so the bump is cheap.
+DUPLICATE_CHECK_ANN_K = 20
+
 
 def find_similar_notes(content, threshold=SIMILAR_THRESHOLD, limit=5):
     """
@@ -351,21 +378,38 @@ def add_engram_with_links(content, category="general", importance="normal", forc
     ann_index = get_ann_index()
     
     # Check for duplicates unless forced
-    # OPTIMIZED: Use ANN index for O(log n) instead of O(n) linear scan
+    #
+    # OPTIMIZED: Use ANN index for O(log n) instead of O(n) linear scan.
+    #
+    # Internal categories (lc-chunks, keyword anchors, consolidation topics,
+    # atomic facts, metrics snapshots) are fragments or derivations of other
+    # content, not standalone documents. They are excluded from the duplicate
+    # candidate pool because their embeddings are near-identical to their
+    # parent notes, which would cause any related root concept to be rejected
+    # as a false positive. See DUPLICATE_CHECK_EXCLUDE above.
     if not force:
         if ann_index.enabled:
-            # Fast duplicate check using ANN index
-            d = ann_index.search(embedding, k=5, min_similarity=DUPLICATE_THRESHOLD)
-            if d:
-                eid,sim = d[0]
+            # Fast duplicate check using ANN index. Iterate through the
+            # candidates in descending similarity order and return the first
+            # non-internal hit at or above DUPLICATE_THRESHOLD.
+            candidates = ann_index.search(embedding, k=DUPLICATE_CHECK_ANN_K, min_similarity=DUPLICATE_THRESHOLD)
+            for eid, sim in candidates:
                 en = get_node(eid)
-                if en: return {"error": "duplicate", "message": f"Similar note exists ({sim:.2%})", "existing_id": eid, "existing_content": en["content"][:200], "similarity": round(sim, 4)}
+                if not en:
+                    continue
+                if en.get("category") in DUPLICATE_CHECK_EXCLUDE:
+                    continue
+                return {"error": "duplicate", "message": f"Similar note exists ({sim:.2%})", "existing_id": eid, "existing_content": en["content"][:200], "similarity": round(sim, 4)}
         else:
             # Fallback to linear scan if ANN not enabled
             for n in get_all_nodes():
-                if n["embedding"] is None: continue
+                if n["embedding"] is None:
+                    continue
+                if n.get("category") in DUPLICATE_CHECK_EXCLUDE:
+                    continue
                 sim = cosine_similarity(embedding, np.frombuffer(n["embedding"], dtype=np.float32))
-                if sim >= DUPLICATE_THRESHOLD: return {"error": "duplicate", "message": f"Similar note exists ({sim:.2%})", "existing_id": n["id"], "existing_content": n["content"][:200], "similarity": round(sim, 4)}
+                if sim >= DUPLICATE_THRESHOLD:
+                    return {"error": "duplicate", "message": f"Similar note exists ({sim:.2%})", "existing_id": n["id"], "existing_content": n["content"][:200], "similarity": round(sim, 4)}
     
     # Create the node with emotional context
     engram_id = create_node(content, category, embedding.tobytes(), importance, emotional_tone, emotional_intensity, emotional_reflection, tags=tags)
