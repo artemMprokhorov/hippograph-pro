@@ -1,9 +1,9 @@
 #!/bin/bash
 # run_benchmark.sh — всё запускается внутри benchmark контейнера
-cd /Volumes/Balances/hippograph-pro
+cd /path/to/hippograph-pro
 export PATH=/usr/local/bin:/opt/homebrew/bin:$PATH
 
-LOG=/Volumes/Balances/hippograph-pro/benchmark/results/run.log
+LOG=/path/to/hippograph-pro/benchmark/results/run.log
 mkdir -p benchmark/results
 
 echo "[$(date)] Copying files into container..."

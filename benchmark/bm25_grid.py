@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 import requests, sys
-sys.path.insert(0, '/Volumes/Balances/hippograph-pro/benchmark')
+sys.path.insert(0, '/path/to/hippograph-pro/benchmark')
 from bm25_api_bench import ATOMIC, PCB
 
 PROD_KEY = 'os.environ.get("NEURAL_API_KEY", "change_me")'

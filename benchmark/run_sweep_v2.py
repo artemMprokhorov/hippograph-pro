@@ -19,9 +19,9 @@ if not SWEEP:
 
 CONTAINER = "hippograph-locomo"
 IMAGE = "hippograph-pro-hippograph-locomo"
-RESULTS_DIR = "/Volumes/Balances/hippograph-pro/benchmark/results"
+RESULTS_DIR = "/path/to/hippograph-pro/benchmark/results"
 API_KEY = "locomo_key_2026"
-DB_PATH = "/Volumes/Balances/hippograph-pro/data/benchmark/locomo_test.db"
+DB_PATH = "/path/to/hippograph-pro/data/benchmark/locomo_test.db"
 
 BASE_ENV = {
     "DB_PATH": "/app/data/locomo_test.db",
@@ -52,9 +52,9 @@ BASE_ENV = {
 }
 
 BASE_VOLUMES = [
-    "/Volumes/Balances/hippograph-pro/data/benchmark:/app/data",
-    "/Volumes/Balances/hippograph-pro/src:/app/src",
-    "/Volumes/Balances/hippograph-pro/benchmark:/app/benchmark",
+    "/path/to/hippograph-pro/data/benchmark:/app/data",
+    "/path/to/hippograph-pro/src:/app/src",
+    "/path/to/hippograph-pro/benchmark:/app/benchmark",
 ]
 
 def log(msg):

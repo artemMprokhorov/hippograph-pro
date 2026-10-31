@@ -1,5 +1,5 @@
 #!/bin/bash
-LOG=/Volumes/Balances/hippograph-pro/reload_locomo.log
+LOG=/path/to/hippograph-pro/reload_locomo.log
 echo "[$(date)] START" > $LOG
 /usr/local/bin/docker exec hippograph-benchmark sqlite3 /app/data/benchmark.db 'DELETE FROM nodes; DELETE FROM edges; DELETE FROM entities; DELETE FROM node_entities; VACUUM;'
 echo "[$(date)] DB cleared" >> $LOG

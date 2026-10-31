@@ -10,7 +10,7 @@ Usage:
     hippograph health
 
 Configuration via environment variables or ~/.hippograph.env:
-    HIPPOGRAPH_URL=http://192.168.0.212:5001
+    HIPPOGRAPH_URL=http://YOUR_SERVER_IP:5001
     HIPPOGRAPH_API_KEY=your_key_here
 """
 import argparse

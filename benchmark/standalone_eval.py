@@ -11,7 +11,7 @@ import json, os, sys, time, sqlite3, math, statistics
 from datetime import datetime
 from pathlib import Path
 
-BASE = Path("/Volumes/Balances/hippograph-pro")
+BASE = Path("/path/to/hippograph-pro")
 DB   = BASE / "data/memory.db.backup_20260226_pro_launch"
 QA   = BASE / "benchmark/results/hippograph_qa.json"
 OUT  = BASE / "benchmark/results/standalone_results.json"

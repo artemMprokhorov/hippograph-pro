@@ -6,7 +6,7 @@
 # Весь pipeline внутри одного скрипта.
 #
 # Usage:
-#   cd /Volumes/Balances/hippograph-pro
+#   cd /path/to/hippograph-pro
 #   bash benchmark/run_exp_e.sh
 #
 # Результаты: benchmark/results/exp_e_results.json

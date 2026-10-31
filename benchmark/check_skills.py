@@ -1,5 +1,5 @@
 import sqlite3
-conn = sqlite3.connect('/Volumes/Balances/hippograph-pro/data/memory.db')
+conn = sqlite3.connect('/path/to/hippograph-pro/data/memory.db')
 
 mastered = conn.execute("SELECT id, category FROM nodes WHERE content LIKE 'SKILL MASTERED%'").fetchall()
 print(f'SKILL MASTERED: {len(mastered)}')

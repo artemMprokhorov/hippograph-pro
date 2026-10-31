@@ -8,7 +8,7 @@ COPY session_context_mcp.py /app/session_context_mcp.py
 
 EXPOSE 5030
 
-ENV SESSION_API_KEY=session_dev_2026
+ENV SESSION_API_KEY=change_me_at_runtime
 ENV SESSION_PORT=5030
 
 CMD ["python3", "/app/session_context_mcp.py"]
