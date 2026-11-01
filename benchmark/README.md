@@ -2,7 +2,7 @@
 
 This directory contains the evaluation pipeline for the [LOCOMO benchmark](https://github.com/snap-research/locomo) — a standardized dataset for testing long-term conversational memory systems.
 
-**Result:** HippoGraph achieves **66.8% Recall@5** at zero LLM cost.
+**Result:** HippoGraph retrieval runs at zero LLM cost.
 
 ---
 
@@ -54,14 +54,14 @@ python3 benchmark/locomo_adapter.py --all \
 python3 benchmark/locomo_eval.py --results benchmark/results/locomo_results.json
 ```
 
-### Expected output
+### Output format
 
 ```
-Overall    Recall@5: 66.8%   MRR: 0.304
-Single-hop          37.9%
-Multi-hop           52.6%
-Temporal            22.9%
-Open-domain         45.5%
+Overall    Recall@5: —   MRR: —
+Single-hop          —
+Multi-hop           —
+Temporal            —
+Open-domain         —
 ```
 
 > ⚠️ Exact numbers may vary slightly due to FAISS ANN index non-determinism across platforms.
@@ -93,12 +93,12 @@ Query → Embedding → ANN Search (HNSW)
 
 ⚠️ **These results measure retrieval quality only, not end-to-end QA accuracy.**
 
-| System | Metric | Score | LLM cost |
-|--------|--------|-------|----------|
-| **HippoGraph** | **Recall@5** | **66.8%** | **$0** |
-| Mem0 | LOCOMO J-score | 66.9% | Required |
-| Letta | LoCoMo accuracy | 74.0% | Required |
-| GPT-4 (no memory) | F1 | 32.1% | Required |
+| System | Metric | LLM cost |
+|--------|--------|----------|
+| **HippoGraph** | **Recall@5** | **$0** |
+| Mem0 | LOCOMO J-score | Required |
+| Letta | LoCoMo accuracy | Required |
+| GPT-4 (no memory) | F1 | Required |
 
 Direct numerical comparison across these metrics is not valid — different metrics measure different things. HippoGraph's Recall@5 measures whether the correct evidence appears in top-5 retrieved results; other systems report LLM-generated answer quality.
 

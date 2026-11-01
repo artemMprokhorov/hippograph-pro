@@ -8,7 +8,7 @@ between different signals.
 Formula: RRF_score(d) = Σ 1/(k + rank_r(d)) for each retriever r
 where k=60 is a constant that prevents top-ranked docs from dominating.
 
-Reference: Cormack et al. (2009), used by Hindsight/TEMPR (Dec 2025, 89.61% LoCoMo)
+Reference: Cormack et al. (2009), used by Hindsight/TEMPR (Dec 2025)
 """
 
 import os

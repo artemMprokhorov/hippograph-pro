@@ -60,7 +60,7 @@ DISABLE_CATEGORY_DECAY=true
 **What you get:**
 - Higher retrieval precision — exact answers to specific questions
 - Notes don’t fade — all project knowledge stays equally accessible
-- Benchmark-validated: 78.7% Recall@5 on LOCOMO with this config
+- Benchmark-validated on LOCOMO with this config
 
 **What you give up:**
 - No emotional context or personal history
@@ -152,13 +152,13 @@ The pipeline combines three signals. Their weights control relative contribution
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `LATE_CHUNKING_ENABLED` | `false` | Enable overlap chunking for long notes. Strongly recommended — +21.7pp LOCOMO. |
+| `LATE_CHUNKING_ENABLED` | `false` | Enable overlap chunking for long notes. Strongly recommended. |
 | `LC_MODE` | `parent` | Chunking mode. `parent` = D1 production config (chunks + parent note). |
 | `LC_CHUNK_CHARS` | `400` | Target chunk size in characters. |
 | `LC_OVERLAP_CHARS` | `200` | Overlap between adjacent chunks (50%). |
 | `LC_MIN_NOTE_CHARS` | `300` | Minimum note length to trigger chunking. |
 
-> ⚠️ Enable this. `LATE_CHUNKING_ENABLED=true` + `LC_MODE=parent` is the production config that achieves 91.1% LOCOMO Recall@5.
+> ⚠️ Enable this. `LATE_CHUNKING_ENABLED=true` + `LC_MODE=parent` is the production config with the best LOCOMO retrieval.
 
 ---
 
@@ -189,7 +189,7 @@ The pipeline combines three signals. Their weights control relative contribution
 |-------|------|-----|-----------|-------|
 | `all-MiniLM-L6-v2` | 384 | ~80MB | English only | Minimal hardware |
 | `paraphrase-multilingual-MiniLM-L12-v2` | 384 | ~120MB | 50+ | **Default — good balance** |
-| `BAAI/bge-m3` | 1024 | ~2.2GB | 100+ | **Production quality — 91.1% LOCOMO** |
+| `BAAI/bge-m3` | 1024 | ~2.2GB | 100+ | **Production quality** |
 
 > ⚠️ Changing `EMBEDDING_MODEL` requires re-indexing all notes:
 > ```bash
@@ -228,7 +228,7 @@ I’m running on minimal hardware (4GB RAM)
 
 I want maximum retrieval precision (benchmark mode)
     → RERANK_WEIGHT=0.8, RERANK_TOP_N=5, HALF_LIFE_DAYS=36500
-    EMBEDDING_MODEL=BAAI/bge-m3 (78.7% Recall@5 with MiniLM, ~91% with BGE-M3)
+    EMBEDDING_MODEL=BAAI/bge-m3
 ```
 
 ---

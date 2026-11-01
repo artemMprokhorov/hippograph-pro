@@ -50,7 +50,7 @@ def _protect(text: str) -> str:
     """Защищаем ложные точки через Unicode placeholderы."""
     # 1. Эллипсис
     text = text.replace('...', PH_ELL)
-    # 2. Десятичные числа (сначала!): 91.1  0.830  78.7
+    # 2. Десятичные числа (сначала!): 3.14  0.25  12.5
     text = re.sub(r'(\d)\.(\d)', lambda m: m.group(1) + PH_DEC + m.group(2), text)
     # 3. Нумерованные списки: 1. 2. 10. — но не если перед ними стоит DEC placeholder
     text = re.sub(r'(?<![\w\xb6])(\d{1,3})\.(?=\s)', lambda m: m.group(1) + PH_LST, text)
@@ -80,7 +80,7 @@ def _restore(text: str) -> str:
 def split_into_sentences(text: str) -> List[str]:
     """
     Split text at real sentence boundaries.
-    Protects: decimals (91.1), lists (1. 2.), abbrevs (Dr.), hyphens, versions.
+    Protects: decimals (3.14), lists (1. 2.), abbrevs (Dr.), hyphens, versions.
     """
     protected = _protect(text)
     # Теперь все ложные точки заменены — разбиваем по [.!?]+\s+

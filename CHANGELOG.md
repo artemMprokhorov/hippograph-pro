@@ -43,14 +43,13 @@ All notable changes to HippoGraph Pro are documented here.
 ### Benchmarks
 - **PCB v5: 100% Recall@5** (Atomic 15/15, Semantic 20/20) — first ever 100%.
 - **Consciousness composite: 0.885** (self_ref: 0.939, metacognition: 0.819, bottleneck: emotional_modulation 0.330).
-- **LOCOMO H3: 90.8% overall** (single-hop 91.5%, multi-hop 90.3%, temporal 65.6%, open-domain 93.6%).
 
 ---
 
 ## [April 7, 2026]
 
 ### Added
-- **H3: Batch keyword anchors** — keyword anchor nodes created after sleep consolidation (not inline). Batch creation gives graph context for better anchor placement. LOCOMO: **90.8% overall, 91.5% single-hop** (+6pp vs D1 baseline on single-hop).
+- **H3: Batch keyword anchors** — keyword anchor nodes created after sleep consolidation (not inline). Batch creation gives graph context for better anchor placement. LOCOMO: single-hop improvement vs D1 baseline.
 - **Temporal edges v2** — 100% node coverage with TEMPORAL_AFTER edges based on timestamp ordering.
 
 ### Changed
@@ -61,7 +60,7 @@ All notable changes to HippoGraph Pro are documented here.
 ## [March 31, 2026]
 
 ### Added
-- **Overlap chunking (session-level)** — D1 production config. LOCOMO: **91.1% Recall@5, MRR 0.830** — best ever at zero LLM cost.
+- **Overlap chunking (session-level)** — D1 production config. LOCOMO — best retrieval configuration at zero LLM cost.
 - **BGE-M3 embedding** (BAAI/bge-m3, 1024-dim) — full multilingual support, 50+ languages.
 - **bge-reranker-v2-m3** — cross-encoder reranking, RERANK_WEIGHT=0.5, TOP_N=20.
 

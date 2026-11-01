@@ -170,23 +170,23 @@ HippoGraph treats memory the way it should be treated — with care.
 
 ## 📊 Benchmarks
 
-### Retrieval — LOCOMO (91.5% single-hop / 90.8% overall, H3 with keyword anchors, zero LLM cost)
+### Retrieval — LOCOMO (H3 with keyword anchors, zero LLM cost)
 
-| Configuration | Recall@5 | MRR |
-|--------------|----------|-----|
-| Session-level (baseline) | 32.6% | 0.223 |
-| Turn-level | 44.2% | 0.304 |
-| Hybrid + Reranking | 65.5% | 0.535 |
-| Hybrid + Query decomposition (semantic-memory-v2) | 66.8% | 0.549 |
-| + Reranker weight=0.8 | 75.7% | 0.641 |
-| **+ ANN top-K=5 (benchmark-optimized config)** | **78.7%** | **0.658** |
-| Production config (Mar 20 2026) — biol. edges + lateral inhibition | 47.9% | 0.362 |
-| Production config (Mar 28 2026) — + bge-reranker-v2-m3 + Late Stage Inhibition | 65.5% | 0.562 |
-| Production config (Mar 28 2026) — + BGE-M3 embedding | 69.4% | 0.594 |
-| **Production config (Mar 31 2026)** — + Overlap Chunking (session-level) | **91.1%** | **0.830** |
-| H3 (Apr 2026) — + Keyword Anchors (batch, after sleep) | **90.8%** overall / **91.5%** single-hop | 0.741 |
+| Configuration |
+|--------------|
+| Session-level (baseline) |
+| Turn-level |
+| Hybrid + Reranking |
+| Hybrid + Query decomposition (semantic-memory-v2) |
+| + Reranker weight=0.8 |
+| **+ ANN top-K=5 (benchmark-optimized config)** |
+| Production config (Mar 20 2026) — biol. edges + lateral inhibition |
+| Production config (Mar 28 2026) — + bge-reranker-v2-m3 + Late Stage Inhibition |
+| Production config (Mar 28 2026) — + BGE-M3 embedding |
+| **Production config (Mar 31 2026)** — + Overlap Chunking (session-level) |
+| H3 (Apr 2026) — + Keyword Anchors (batch, after sleep) |
 
-> All results at **zero LLM inference cost**. Other systems use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
+> All configurations run at **zero LLM inference cost**. Other systems use different metrics — not directly comparable. See [BENCHMARK.md](BENCHMARK.md).
 
 ### End-to-End QA — Personal data (F1=38.7%)
 
@@ -196,11 +196,9 @@ HippoGraph treats memory the way it should be treated — with care.
 | Factual | 40.2% | 67.6% |
 | Temporal | 29.2% | 58.5% |
 
-> GPT-4 without memory: F1=32.1%. HippoGraph +6.6pp with zero retrieval cost.
-
 ### Personal Continuity — Real Data (100% Recall@5, PCB v5)
 
-> ⚠️ **Note:** PCB (Personal Continuity Benchmark) is our internal benchmark on real personal data — not LOCOMO. LOCOMO score is 90.8% (see above). PCB tests whether the system remembers *your* history, decisions, and identity across sessions.
+> ⚠️ **Note:** PCB (Personal Continuity Benchmark) is our internal benchmark on real personal data — not LOCOMO (see above for LOCOMO). PCB tests whether the system remembers *your* history, decisions, and identity across sessions.
 
 | Category | Recall@5 | Notes |
 |----------|----------|-------|
@@ -218,7 +216,7 @@ HippoGraph treats memory the way it should be treated — with care.
 
 LOCOMO tests retrieval over random multi-session conversations between strangers. HippoGraph is optimized for the opposite: deep associative memory over *your* data, with emotional weighting and decay tuned for personal context.
 
-> Production track: 47.9% (Mar 20) → 65.5% (+17.6pp, reranker+inhibition) → 69.4% (+3.9pp, BGE-M3) → **91.1% (+21.7pp, overlap chunking)**. Temporal: 66.7% — best ever. Open-domain: 96.6%.
+> Production track: Mar 20 config → reranker + inhibition → BGE-M3 → **overlap chunking**.
 
 Running LOCOMO on HippoGraph is like benchmarking a long-term relationship therapist on speed-dating recall. The architecture is different because the problem is different.
 
@@ -361,11 +359,11 @@ Your data stays on your computer. Nothing goes to any cloud service.
 | **Temporal Filtering (dateparser)** | ✅ Deployed | Natural language time queries: "last week", "на прошлой неделе", "yesterday" auto-convert to time filters |
 | **Synonym Normalization** | ✅ Deployed | Abbreviation + cross-lingual expansion: 50+ pairs EN/RU/ES/DE/FR/PT; search-time `normalize_query()` maps any language to canonical EN form |
 | **Multilingual (50+ languages)** | ✅ Deployed | Full retrieval + associations in any language; EN/RU/DE/ES/FR/PT contradiction patterns |
-| **Multilingual sentence splitting** | ✅ Deployed | `split_into_sentences` with placeholder protection for EN/RU/ES/DE/FR/IT abbreviations (Dr, Sr, Hr, Mme, etc.), decimal numbers (91.1, 0.830), version strings (v2.1, E1), hyphenated identifiers (bge-reranker-v2-m3). All 15 test cases pass. |
+| **Multilingual sentence splitting** | ✅ Deployed | `split_into_sentences` with placeholder protection for EN/RU/ES/DE/FR/IT abbreviations (Dr, Sr, Hr, Mme, etc.), decimal numbers (3.14, 0.25), version strings (v2.1, E1), hyphenated identifiers (bge-reranker-v2-m3). All 15 test cases pass. |
 | Skills as Experience | ✅ Deployed | Skills ingested as associative memories with emotional weight |
 | Skills Security Scanner | ✅ Deployed | Prompt injection + persona hijack detection before ingestion |
 | **Searchable Tags** | ✅ Deployed | AI-generated tags at write time (why, what, keywords). BM25 indexes content + tags for improved keyword retrieval. 822 existing notes retrofitted via extractive TF-IDF |
-| **Keyword Anchors (H3)** | ✅ Deployed | spaCy NER + regex extraction per note → keyword-anchor node via PART_OF edge. Small-to-Big retrieval: anchor found in ANN → parent returned. Batch creation after sleep consolidation. single-hop +6pp vs D1 baseline. `KEYWORD_ANCHOR_ENABLED=true` |
+| **Keyword Anchors (H3)** | ✅ Deployed | spaCy NER + regex extraction per note → keyword-anchor node via PART_OF edge. Small-to-Big retrieval: anchor found in ANN → parent returned. Batch creation after sleep consolidation. Improves single-hop vs D1 baseline. `KEYWORD_ANCHOR_ENABLED=true` |
 | **Working Memory Journal** | ✅ Deployed | update_working_memory MCP tool — INSERT mode (not overwrite). Each call creates new working-memory node with TEMPORAL_AFTER edge to previous. get_session_context returns last 3 entries for temporal context. Session Context MCP v3.1. |
 
 > **Session Context MCP** is an optional companion service that provides `get_session_context`, `update_session_context`, and `extract_remember_blocks` tools. Source: `session_context_mcp.py` + `Dockerfile.session-context` (307MB, python:3.11-slim). Build: `docker build -f Dockerfile.session-context -t session-context-mcp .`
@@ -391,7 +389,7 @@ HippoGraph ships tuned for **personal AI memory** — an agent that knows you, r
 | **Project Memory** | Agent knows your *project* — docs, decisions, codebase. No personal layer. | Decay OFF, rerank 0.8, ANN top-K=5 |
 | **Hybrid** | Work context + thin personal layer | Decay slow (90d), rerank 0.6 |
 
-The Project Memory config is the benchmark-validated configuration: **78.7% Recall@5** on LOCOMO.
+The Project Memory config is the benchmark-validated configuration on LOCOMO.
 
 The core tradeoff: higher reranker weight + smaller candidate pool = more precise answers to specific questions. Lower reranker weight + higher spreading activation = richer associative recall for open-ended context.
 
